@@ -5,11 +5,12 @@ from typing import List, Dict, Tuple
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from .config import VECTORSTORE_DIR, EMBED_MODEL
+from .config import VECTORSTORE_DIR, EMBED_MODEL, chinese_tokenize
 from .splitter import RecipeSplitter, collect_all_recipes
 
 FAISS_INDEX_PATH = os.path.join(VECTORSTORE_DIR, "faiss.index")
 CHUNKS_PATH = os.path.join(VECTORSTORE_DIR, "chunks.pkl")
+BM25_INDEX_PATH = os.path.join(VECTORSTORE_DIR, "bm25_index.pkl")
 
 
 def build_index() -> Tuple[int, int]:
@@ -57,6 +58,21 @@ def build_index() -> Tuple[int, int]:
     print(f"Saving FAISS index to {FAISS_INDEX_PATH}")
     faiss.write_index(index, FAISS_INDEX_PATH)
 
+    # Build and persist BM25 index
+    print(f"Building BM25 index...")
+    from rank_bm25 import BM25Okapi
+
+    tokenized = [chinese_tokenize(text) for text in texts]
+    bm25 = BM25Okapi(tokenized)
+    bm25_payload = {
+        "bm25": bm25,
+        "tokenized_corpus": tokenized,
+        "texts": texts,
+    }
+    with open(BM25_INDEX_PATH, "wb") as f:
+        pickle.dump(bm25_payload, f)
+    print(f"  BM25 index saved to {BM25_INDEX_PATH}")
+
     # Save chunks metadata alongside the index
     # Convert to a pickle-friendly format (strip model internals)
     serializable = []
@@ -80,7 +96,8 @@ def build_index() -> Tuple[int, int]:
     print(f"  Recipes (dishes): {len(dish_names)}")
     print(f"  Total chunks:     {len(all_chunks)}")
     print(f"  Embedding dim:    {dim}")
-    print(f"  Index path:       {FAISS_INDEX_PATH}")
+    print(f"  FAISS index:      {FAISS_INDEX_PATH}")
+    print(f"  BM25 index:       {BM25_INDEX_PATH}")
     print(f"  Chunks path:      {CHUNKS_PATH}")
 
     return len(dish_names), len(all_chunks)
