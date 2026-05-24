@@ -6,6 +6,8 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from ..preprocess.config import VECTORSTORE_DIR, EMBED_MODEL, chinese_tokenize
+from .filters import apply_filters
+from .diversity import diversify_by_category, mmr_rerank
 
 # Paths to pre-built index files
 FAISS_INDEX_PATH = os.path.join(VECTORSTORE_DIR, "faiss.index")
@@ -156,3 +158,81 @@ def hybrid_search(
     fused.sort(key=lambda x: x["score"], reverse=True)
 
     return fused[:k]
+
+
+def recommend_dishes(
+    query: str,
+    k: int = 5,
+    filters: Optional[Dict] = None,
+    diversify: bool = True,
+    probes: Optional[List[str]] = None,
+) -> List[Dict]:
+    """Multi-dish recommendation.
+
+    Uses hybrid search (dense + sparse) but only returns dish-level (L1) chunks
+    suitable for recommendation scenarios.
+
+    Args:
+        query: User query or rewritten query.
+        k: Number of dishes to recommend.
+        filters: Metadata filters (difficulty, category, calories).
+        diversify: Apply category-based diversity sorting.
+        probes: Multiple search probes for diverse recall (from query rewriter).
+
+    Returns:
+        List of {score, chunk} with dish-level chunks, sorted & diversified.
+    """
+    # 1. Multi-probe candidate collection
+    candidates: List[Dict] = []
+    seen_dishes = set()
+
+    search_queries = (probes or []) + [query]
+    for sq in search_queries[:3]:  # limit to 3 probes
+        results = hybrid_search(sq, k=30)
+        for r in results:
+            chunk = r["chunk"]
+            if chunk.get("level") != "dish":
+                continue
+            dish_name = chunk["metadata"].get("dish_name", "")
+            if dish_name in seen_dishes:
+                continue
+            seen_dishes.add(dish_name)
+            candidates.append(r)
+
+    # 2. Apply filters
+    if filters:
+        # Remove filter-only keys before passing chunks
+        filtered_chunks = apply_filters([c["chunk"] for c in candidates], filters)
+        chunk_set = {id(c): c for c in filtered_chunks}
+        candidates = [c for c in candidates if id(c["chunk"]) in chunk_set]
+
+    if not candidates:
+        return []
+
+    # 3. Diversity sort
+    if diversify and len(candidates) > 1:
+        # Try to get query embedding for MMR
+        try:
+            model = _get_model()
+            import faiss
+            q_emb = model.encode([query]).astype(np.float32)
+            faiss.normalize_L2(q_emb)
+            ranked = mmr_rerank(
+                [c["chunk"] for c in candidates],
+                q_emb[0],
+                lambda_=0.5,
+                k=k,
+            )
+            chunk_index = {id(c["chunk"]): c for c in candidates}
+            return [chunk_index[id(c)] for c in ranked if id(c) in chunk_index]
+        except Exception:
+            pass
+
+        # Fallback: category-based round-robin
+        ranked = diversify_by_category([c["chunk"] for c in candidates], k=k)
+        chunk_index = {id(c["chunk"]): c for c in candidates}
+        return [chunk_index[id(c)] for c in ranked if id(c) in chunk_index]
+
+    # 4. Simple top-k by score
+    candidates.sort(key=lambda x: x["score"], reverse=True)
+    return candidates[:k]
