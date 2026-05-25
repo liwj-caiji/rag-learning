@@ -5,14 +5,17 @@ from typing import List, Dict, Optional
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from ..preprocess.config import VECTORSTORE_DIR, EMBED_MODEL, chinese_tokenize
+from src.config import (
+    VECTORSTORE_DIR, FAISS_INDEX_PATH, CHUNKS_PATH, BM25_INDEX_PATH,
+    EMBED_MODEL,
+    HYBRID_TOPK_DEFAULT, DENSE_CANDIDATES_K, SPARSE_CANDIDATES_K, RRF_K,
+    BM25_SCORE_MIN,
+    RECOMMEND_TOPK_DEFAULT, RECOMMEND_MAX_PROBES, RECOMMEND_PROBE_CANDIDATES,
+    MMR_LAMBDA, MMR_TOPK_DEFAULT,
+)
 from .filters import apply_filters
 from .diversity import diversify_by_category, mmr_rerank
-
-# Paths to pre-built index files
-FAISS_INDEX_PATH = os.path.join(VECTORSTORE_DIR, "faiss.index")
-CHUNKS_PATH = os.path.join(VECTORSTORE_DIR, "chunks.pkl")
-BM25_INDEX_PATH = os.path.join(VECTORSTORE_DIR, "bm25_index.pkl")
+from ..preprocess.config import chinese_tokenize
 
 _RETRIEVAL_CACHE = {}
 
@@ -45,7 +48,7 @@ def _get_model():
     return _RETRIEVAL_CACHE["model"]
 
 
-def dense_search(query: str, k: int = 50) -> List[Dict]:
+def dense_search(query: str, k: int = DENSE_CANDIDATES_K) -> List[Dict]:
     """Dense retrieval via FAISS cosine similarity.
 
     Returns list of {score, chunk} sorted descending by score.
@@ -67,7 +70,7 @@ def dense_search(query: str, k: int = 50) -> List[Dict]:
     return results
 
 
-def sparse_search(query: str, k: int = 50) -> List[Dict]:
+def sparse_search(query: str, k: int = SPARSE_CANDIDATES_K) -> List[Dict]:
     """Sparse retrieval via BM25 keyword matching.
 
     Returns list of {score, chunk} sorted descending by score.
@@ -84,7 +87,7 @@ def sparse_search(query: str, k: int = 50) -> List[Dict]:
 
     results = []
     for idx in top_indices:
-        if scores[idx] <= 0:
+        if scores[idx] <= BM25_SCORE_MIN:
             continue
         results.append({"score": float(scores[idx]), "chunk": chunks[idx]})
     return results
@@ -92,10 +95,10 @@ def sparse_search(query: str, k: int = 50) -> List[Dict]:
 
 def hybrid_search(
     query: str,
-    k: int = 5,
-    dense_k: int = 50,
-    sparse_k: int = 50,
-    rrf_k: float = 60.0,
+    k: int = HYBRID_TOPK_DEFAULT,
+    dense_k: int = DENSE_CANDIDATES_K,
+    sparse_k: int = SPARSE_CANDIDATES_K,
+    rrf_k: float = RRF_K,
 ) -> List[Dict]:
     """Hybrid search combining dense (FAISS) and sparse (BM25) with RRF fusion.
 
@@ -162,7 +165,7 @@ def hybrid_search(
 
 def recommend_dishes(
     query: str,
-    k: int = 5,
+    k: int = RECOMMEND_TOPK_DEFAULT,
     filters: Optional[Dict] = None,
     diversify: bool = True,
     probes: Optional[List[str]] = None,
@@ -187,8 +190,8 @@ def recommend_dishes(
     seen_dishes = set()
 
     search_queries = (probes or []) + [query]
-    for sq in search_queries[:3]:  # limit to 3 probes
-        results = hybrid_search(sq, k=30)
+    for sq in search_queries[:RECOMMEND_MAX_PROBES]:
+        results = hybrid_search(sq, k=RECOMMEND_PROBE_CANDIDATES)
         for r in results:
             chunk = r["chunk"]
             if chunk.get("level") != "dish":
@@ -220,7 +223,7 @@ def recommend_dishes(
             ranked = mmr_rerank(
                 [c["chunk"] for c in candidates],
                 q_emb[0],
-                lambda_=0.5,
+                lambda_=MMR_LAMBDA,
                 k=k,
             )
             chunk_index = {id(c["chunk"]): c for c in candidates}

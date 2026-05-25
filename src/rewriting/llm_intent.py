@@ -8,11 +8,11 @@ from typing import Dict, List, Optional
 
 from openai import OpenAI
 
+from src.config import (
+    LLM_INTENT_MODEL, LLM_INTENT_API_BASE, LLM_INTENT_TIMEOUT,
+    LLM_INTENT_TEMPERATURE, LLM_INTENT_MAX_TOKENS, LLM_API_KEY_ENV,
+)
 from .intent import IntentResult, IntentType, _build_rewritten_query, _build_probes
-
-# Default LLM configuration
-DEFAULT_MODEL = "deepseek-v4-flash"
-DEFAULT_API_BASE = "https://api.deepseek.com"
 
 
 class LLMIntentClassifier:
@@ -29,8 +29,8 @@ class LLMIntentClassifier:
 
     def __init__(
         self,
-        model: str = DEFAULT_MODEL,
-        api_base: str = DEFAULT_API_BASE,
+        model: str = LLM_INTENT_MODEL,
+        api_base: str = LLM_INTENT_API_BASE,
         api_key: Optional[str] = None,
         fallback: bool = True,
     ):
@@ -38,9 +38,11 @@ class LLMIntentClassifier:
         self.api_base = api_base
         self.fallback = fallback
 
-        api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
+        api_key = api_key or os.environ.get(LLM_API_KEY_ENV)
         if api_key:
-            self._client = OpenAI(api_key=api_key, base_url=api_base)
+            self._client = OpenAI(
+                api_key=api_key, base_url=api_base, timeout=LLM_INTENT_TIMEOUT,
+            )
         else:
             self._client = None
 
@@ -63,8 +65,9 @@ class LLMIntentClassifier:
                 {"role": "user", "content": query},
             ],
             response_format={"type": "json_object"},
-            temperature=0.1,
-            max_tokens=512,
+            temperature=LLM_INTENT_TEMPERATURE,
+            max_tokens=LLM_INTENT_MAX_TOKENS,
+            timeout=LLM_INTENT_TIMEOUT,
         )
 
         raw = resp.choices[0].message.content
@@ -133,7 +136,7 @@ _SYSTEM_PROMPT = """你是一个食谱查询分析助手。分析用户的查询
   "rewritten_query": "用于搜索的改写查询（去除语气词，保留食物关键词）",
   "filters": {
     "difficulty": null 或 "★" / "★★" / "★★★★",
-    "category": null 或 "素菜" / "肉菜" / "汤" / "早餐" / "水产" / "主食" / "甜点",
+    "category": null 或 "vegetable_dish" / "meat_dish" / "soup" / "breakfast" / "aquatic" / "staple" / "dessert",
     "calories": null 或 "low" / "high"
   },
   "target_dish": null 或 "具体的菜名（不要带"的做法"后缀）",
@@ -144,6 +147,6 @@ _SYSTEM_PROMPT = """你是一个食谱查询分析助手。分析用户的查询
 
 ## 约束提取规则
 - difficulty: 简单/快手→★, 中等→★★, 困难/大厨→★★★★
-- category: 按食材/类型推断（蔬菜→素菜, 猪肉/牛肉→肉菜, 鱼虾→水产）
+- category: 按食材/类型推断（vegetable_dish, 猪肉/牛肉→meat_dish, 鱼虾→aquatic, 汤→soup, 早餐→breakfast, 主食→staple, 甜点→dessert）
 - calories: 低卡/减肥/清淡→low, 高热量/硬菜→high
 - probes: 推荐意图时生成3-5个不同角度的搜索词"""

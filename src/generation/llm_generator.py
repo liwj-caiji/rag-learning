@@ -7,10 +7,11 @@ from typing import Dict, List, Optional
 
 from openai import OpenAI
 
+from src.config import (
+    LLM_GEN_MODEL, LLM_GEN_API_BASE, LLM_GEN_TIMEOUT,
+    LLM_GEN_TEMPERATURE, LLM_GEN_MAX_TOKENS, LLM_API_KEY_ENV,
+)
 from .base import Generator
-
-DEFAULT_MODEL = "deepseek-v4-flash"
-DEFAULT_API_BASE = "https://api.deepseek.com"
 
 
 class LLMGenerator(Generator):
@@ -23,8 +24,8 @@ class LLMGenerator(Generator):
 
     def __init__(
         self,
-        model: str = DEFAULT_MODEL,
-        api_base: str = DEFAULT_API_BASE,
+        model: str = LLM_GEN_MODEL,
+        api_base: str = LLM_GEN_API_BASE,
         api_key: Optional[str] = None,
         fallback: bool = True,
     ):
@@ -32,8 +33,10 @@ class LLMGenerator(Generator):
         self.api_base = api_base
         self.fallback = fallback
 
-        api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
-        self._client = OpenAI(api_key=api_key, base_url=api_base) if api_key else None
+        api_key = api_key or os.environ.get(LLM_API_KEY_ENV)
+        self._client = OpenAI(
+            api_key=api_key, base_url=api_base, timeout=LLM_GEN_TIMEOUT,
+        ) if api_key else None
 
         if self.fallback:
             from .template import TemplateGenerator
@@ -66,8 +69,9 @@ class LLMGenerator(Generator):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=0.3,
-            max_tokens=2048,
+            temperature=LLM_GEN_TEMPERATURE,
+            max_tokens=LLM_GEN_MAX_TOKENS,
+            timeout=LLM_GEN_TIMEOUT,
         )
 
         return resp.choices[0].message.content or ""

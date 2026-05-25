@@ -2,6 +2,8 @@
 
 from typing import Dict, List, Optional
 
+from src.config import CALORIE_LOW_THRESHOLD, CALORIE_HIGH_THRESHOLD
+
 
 def apply_filters(
     chunks: List[Dict],
@@ -70,9 +72,9 @@ def _match_calories(meta: Dict, filters: Dict) -> bool:
         return True
     kcal = int(m.group(1))
     if cal == "low":
-        return kcal <= 300
+        return kcal <= CALORIE_LOW_THRESHOLD
     elif cal == "high":
-        return kcal >= 600
+        return kcal >= CALORIE_HIGH_THRESHOLD
     return True
 
 

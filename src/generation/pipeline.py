@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import time
 from typing import Dict, List, Optional
 
+from src.config import (
+    LLM_GEN_MODEL, LLM_GEN_API_BASE, LLM_API_KEY_ENV,
+    PIPELINE_HOWTO_K, PIPELINE_HOWTO_DENSE_K, PIPELINE_HOWTO_SPARSE_K,
+    PIPELINE_INGREDIENT_K, PIPELINE_INGREDIENT_DENSE_K, PIPELINE_INGREDIENT_SPARSE_K,
+)
 from ..rewriting import IntentResult, QueryRewriter, LLMIntentClassifier
 from ..retrieval import hybrid_search, recommend_dishes
 from .base import Generator
 from .template import TemplateGenerator
+
+log = logging.getLogger("pipeline")
 
 
 class RAGPipeline:
@@ -29,11 +38,11 @@ class RAGPipeline:
         rewriter: Optional[QueryRewriter] = None,
         generator: Optional[Generator] = None,
         use_llm: bool = False,
-        llm_model: str = "deepseek-v4-flash",
-        llm_api_base: str = "https://api.deepseek.com",
+        llm_model: str = LLM_GEN_MODEL,
+        llm_api_base: str = LLM_GEN_API_BASE,
     ):
         if use_llm and (not rewriter or not generator):
-            api_key = os.environ.get("DEEPSEEK_API_KEY")
+            api_key = os.environ.get(LLM_API_KEY_ENV)
             if not api_key:
                 raise ValueError(
                     "DEEPSEEK_API_KEY environment variable is required "
@@ -63,26 +72,30 @@ class RAGPipeline:
         query: str,
         top_k: int = 5,
     ) -> str:
-        """Execute full RAG pipeline.
+        """Execute full RAG pipeline."""
+        log.info("Query: %r | top_k=%d", query, top_k)
 
-        1. Rewrite: classify intent, extract constraints, generate probes
-        2. Retrieve: select strategy based on intent
-        3. Assemble: build structured context
-        4. Generate: produce final response
-        """
-        # 1. Rewrite
+        t0 = time.time()
         intent_result = self.rewriter.rewrite(query)
+        log.info("Rewrite: intent=%s target=%s | %.2fs",
+                 intent_result.intent, intent_result.target_dish, time.time() - t0)
 
-        # 2. Retrieve
-        context = self._retrieve(intent_result, top_k)
+        t1 = time.time()
+        context = self._retrieve(intent_result, top_k, query)
+        log.info("Retrieve: %d chunks | %.2fs", len(context), time.time() - t1)
 
-        # 3. Generate
-        return self.generator.generate(query, context, intent_result.intent)
+        t2 = time.time()
+        answer = self.generator.generate(query, context, intent_result.intent)
+        log.info("Generate: %d chars | %.2fs", len(answer), time.time() - t2)
+
+        log.info("Total: %.2fs", time.time() - t0)
+        return answer
 
     def _retrieve(
         self,
         intent_result: IntentResult,
         top_k: int,
+        query: str = "",
     ) -> List[Dict]:
         """Select retrieval strategy based on intent."""
         intent = intent_result.intent
@@ -99,7 +112,10 @@ class RAGPipeline:
         if intent == "howto":
             dish_query = intent_result.target_dish or ""
             query_str = f"{dish_query} 操作" if dish_query else intent_result.rewritten
-            results = hybrid_search(query_str, k=50, dense_k=100, sparse_k=100)
+            results = hybrid_search(
+                query_str, k=PIPELINE_HOWTO_K,
+                dense_k=PIPELINE_HOWTO_DENSE_K, sparse_k=PIPELINE_HOWTO_SPARSE_K,
+            )
             # Prefer 操作 sections matching the target dish name
             op_results = [
                 r for r in results
@@ -123,7 +139,10 @@ class RAGPipeline:
             query_str = (
                 f"{dish_query} 必备原料和工具" if dish_query else intent_result.rewritten
             )
-            results = hybrid_search(query_str, k=50, dense_k=100, sparse_k=100)
+            results = hybrid_search(
+                query_str, k=PIPELINE_INGREDIENT_K,
+                dense_k=PIPELINE_INGREDIENT_DENSE_K, sparse_k=PIPELINE_INGREDIENT_SPARSE_K,
+            )
             ing_results = [
                 r for r in results
                 if r["chunk"]["metadata"].get("section_type") == "必备原料和工具"
@@ -150,7 +169,7 @@ class RAGPipeline:
     ) -> Dict:
         """Run pipeline and return detailed trace for debugging."""
         intent_result = self.rewriter.rewrite(query)
-        context = self._retrieve(intent_result, top_k)
+        context = self._retrieve(intent_result, top_k, query)
         answer = self.generator.generate(query, context, intent_result.intent)
 
         return {
@@ -163,9 +182,10 @@ class RAGPipeline:
             "num_chunks": len(context),
             "chunks": [
                 {
-                    "dish": c["chunk"]["metadata"].get("dish_name"),
-                    "level": c["chunk"]["level"],
-                    "section": c["chunk"]["metadata"].get("section_type"),
+                    "dish": c["chunk"]["metadata"].get("dish_name") or "",
+                    "level": c["chunk"]["level"] or "",
+                    "section": c["chunk"]["metadata"].get("section_type") or "",
+                    "category": c["chunk"]["metadata"].get("category") or "",
                 }
                 for c in context
             ],

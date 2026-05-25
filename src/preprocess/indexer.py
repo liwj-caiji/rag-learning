@@ -1,3 +1,5 @@
+"""Build FAISS / BM25 indices from recipe markdown files."""
+
 import os
 import pickle
 from typing import List, Dict, Tuple
@@ -5,12 +7,12 @@ from typing import List, Dict, Tuple
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from .config import VECTORSTORE_DIR, EMBED_MODEL, chinese_tokenize
+from src.config import (
+    VECTORSTORE_DIR, FAISS_INDEX_PATH, CHUNKS_PATH, BM25_INDEX_PATH,
+    EMBED_MODEL,
+)
+from .config import chinese_tokenize
 from .splitter import RecipeSplitter, collect_all_recipes
-
-FAISS_INDEX_PATH = os.path.join(VECTORSTORE_DIR, "faiss.index")
-CHUNKS_PATH = os.path.join(VECTORSTORE_DIR, "chunks.pkl")
-BM25_INDEX_PATH = os.path.join(VECTORSTORE_DIR, "bm25_index.pkl")
 
 
 def build_index() -> Tuple[int, int]:

@@ -7,12 +7,32 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import os
 import pickle
+import time
 from collections import Counter
 from typing import Dict, List, Optional, Tuple
 
 import gradio as gr
+
+from src.config import (
+    LOG_LEVEL, LOG_FORMAT, LOG_DATE_FORMAT, LOG_DIR, LOG_FILE, LOG_SUPPRESS,
+    APP_HOST, APP_PORT,
+    APP_QUEUE_DEFAULT_CONCURRENCY, APP_QUEUE_MAX_SIZE, APP_EVENT_CONCURRENCY,
+    EMBED_DIM, RRF_K,
+)
+
+logging.basicConfig(level=LOG_LEVEL, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+log = logging.getLogger("app")
+
+os.makedirs(LOG_DIR, exist_ok=True)
+_file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8", mode="a")
+_file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+logging.getLogger().addHandler(_file_handler)
+
+for noisy in LOG_SUPPRESS:
+    logging.getLogger(noisy).setLevel(logging.WARNING)
 
 # ---------------------------------------------------------------------------
 # Lazy backend
@@ -24,20 +44,46 @@ _PIPELINE_CACHE: Dict[str, object] = {}
 def _get_pipeline(use_llm: bool = False):
     key = f"pipe_{use_llm}"
     if key not in _PIPELINE_CACHE:
+        log.info("Creating pipeline (use_llm=%s)", use_llm)
+        t0 = time.time()
         from src.generation import RAGPipeline
         _PIPELINE_CACHE[key] = RAGPipeline(use_llm=use_llm)
+        log.info("Pipeline created in %.2fs", time.time() - t0)
     return _PIPELINE_CACHE[key]
+
+
+def _warmup():
+    """Preload model and index at startup so first user request is fast."""
+    log.info("Warmup: preloading model and index...")
+    t0 = time.time()
+    try:
+        from src.retrieval.hybrid import hybrid_search
+        hybrid_search("预热", k=1)
+        log.info("Warmup done in %.2fs", time.time() - t0)
+    except Exception as e:
+        log.warning("Warmup failed (%s), first request may be slow", e)
 
 
 def _run_pipeline(query: str, top_k: int, use_llm: bool) -> dict:
     """Run full pipeline and return trace."""
     if not query.strip():
+        log.info("Empty query, returning immediately")
         return {"intent": "", "rewritten": "", "filters": {}, "probes": [],
                 "target_dish": None, "num_chunks": 0, "chunks": [], "answer": "请输入查询"}
+    log.info("Pipeline start | query=%r top_k=%d use_llm=%s", query, top_k, use_llm)
+    t0 = time.time()
     try:
         pipe = _get_pipeline(use_llm)
-        return pipe.trace(query, top_k=top_k)
+        result = pipe.trace(query, top_k=top_k)
+        elapsed = time.time() - t0
+        log.info(
+            "Pipeline done | intent=%s chunks=%d elapsed=%.2fs",
+            result.get("intent"), result.get("num_chunks"), elapsed,
+        )
+        return result
     except Exception as e:
+        elapsed = time.time() - t0
+        log.error("Pipeline failed after %.2fs | %s: %s", elapsed, type(e).__name__, e)
         return {"intent": "error", "rewritten": "", "filters": {}, "probes": [],
                 "target_dish": None, "num_chunks": 0, "chunks": [],
                 "answer": f"❌ 执行失败：{e}"}
@@ -46,19 +92,30 @@ def _run_pipeline(query: str, top_k: int, use_llm: bool) -> dict:
 def _chat_answer(message: str, history: List, use_llm: bool, top_k: int) -> Tuple[List, str]:
     if not message or not message.strip():
         return history, ""
+    log.info("Chat start | query=%r use_llm=%s top_k=%d", message, use_llm, top_k)
+    t0 = time.time()
     try:
         pipe = _get_pipeline(use_llm)
         answer = pipe.run(message, top_k=top_k)
-        history.append((message, answer))
+        elapsed = time.time() - t0
+        log.info("Chat done | elapsed=%.2fs answer_len=%d", elapsed, len(answer))
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": answer})
     except Exception as e:
-        history.append((message, f"❌ 错误：{e}"))
+        elapsed = time.time() - t0
+        log.error("Chat failed after %.2fs | %s: %s", elapsed, type(e).__name__, e)
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": f"❌ 错误：{e}"})
     return history, ""
 
 
 def _search(query: str, k: int, mode: str) -> Tuple[str, List, List]:
     if not query.strip():
+        log.info("Empty search query")
         return "请输入查询", [], []
 
+    log.info("Search start | query=%r k=%d mode=%s", query, k, mode)
+    t0 = time.time()
     try:
         if "混合" in mode:
             from src.retrieval import hybrid_search
@@ -69,7 +126,11 @@ def _search(query: str, k: int, mode: str) -> Tuple[str, List, List]:
         else:
             from src.retrieval import sparse_search
             results = sparse_search(query, k=k)
+        elapsed = time.time() - t0
+        log.info("Search done | results=%d elapsed=%.2fs", len(results), elapsed)
     except Exception as e:
+        elapsed = time.time() - t0
+        log.error("Search failed after %.2fs | %s: %s", elapsed, type(e).__name__, e)
         return f"❌ 检索失败：{e}", [], []
 
     rows = []
@@ -90,7 +151,16 @@ def _search(query: str, k: int, mode: str) -> Tuple[str, List, List]:
 # Data
 # ---------------------------------------------------------------------------
 
+_STATS_CACHE: Optional[str] = None
+
+
 def _load_stats() -> str:
+    global _STATS_CACHE
+    if _STATS_CACHE is not None:
+        log.info("Returning cached stats")
+        return _STATS_CACHE
+    log.info("Loading data stats...")
+    t0 = time.time()
     try:
         from src.preprocess.splitter import collect_all_recipes
         from src.preprocess.config import DISHES_DIR, VECTORSTORE_DIR
@@ -116,14 +186,14 @@ def _load_stats() -> str:
             total_chunks = 0
             level_lines = "（未构建索引）\n"
 
-        return f"""## 数据集统计
+        _STATS_CACHE = f"""## 数据集统计
 
 | 指标 | 数值 |
 |------|------|
 | 食谱总数 | {total} |
 | 品类数 | {len(cats)} |
 | 分块总数 | {total_chunks} |
-| 向量维度 | 768 |
+| 向量维度 | {EMBED_DIM} |
 | 检索方式 | 混合检索（FAISS + BM25 + RRF） |
 
 ### 品类分布
@@ -131,6 +201,8 @@ def _load_stats() -> str:
 ### 分块层级分布
 {level_lines}
 """
+        log.info("Stats loaded in %.2fs", time.time() - t0)
+        return _STATS_CACHE
     except Exception as e:
         return f"❌ 加载失败：`{e}`"
 
@@ -192,7 +264,7 @@ with gr.Blocks(title="🍳 食谱 RAG 系统", fill_width=True) as demo:
 
                     with gr.Accordion("② 检索结果", open=False):
                         pipe_results = gr.Dataframe(
-                            headers=["菜名", "层级", "章节", "来源文件"],
+                            headers=["菜名", "层级", "章节", "类别"],
                             label="命中分块",
                         )
 
@@ -219,7 +291,7 @@ with gr.Blocks(title="🍳 食谱 RAG 系统", fill_width=True) as demo:
 
                 # ---- Tab 3: Data ----
                 with gr.Tab("📦 数据概览"):
-                    data_stats = gr.Markdown("加载中…")
+                    data_stats = gr.Markdown("点击 **🔄 刷新** 加载数据统计")
                     gr.Markdown("---")
                     gr.Markdown("**提示**：如需更新统计，请先运行 `python -m src.preprocess.indexer` 重建索引后点击刷新。")
                     data_refresh = gr.Button("🔄 刷新")
@@ -287,16 +359,18 @@ with gr.Blocks(title="🍳 食谱 RAG 系统", fill_width=True) as demo:
             "命中 chunk 数": trace.get("num_chunks", 0),
         }
         rows = [
-            [c.get("dish", "?"), c.get("level", ""), c.get("section", ""), c.get("dish", "?")]
+            [c.get("dish", "?"), c.get("level", ""), c.get("section", ""), c.get("category", "")]
             for c in trace.get("chunks", [])
         ]
         answer = trace.get("answer", "（无结果）")
-        return intent_data, gr.Dataframe(value=rows, headers=["菜名", "层级", "章节", "来源"]), answer
+        return intent_data, gr.Dataframe(value=rows, headers=["菜名", "层级", "章节", "类别"]), answer
 
     pipe_btn.click(
         fn=on_pipe_run,
         inputs=[pipe_query, pipe_top_k, pipe_llm],
         outputs=[pipe_intent, pipe_results, pipe_answer],
+        concurrency_limit=APP_EVENT_CONCURRENCY,
+        show_progress="full",
     )
 
     # -- Search --
@@ -314,6 +388,8 @@ with gr.Blocks(title="🍳 食谱 RAG 系统", fill_width=True) as demo:
         fn=on_srch,
         inputs=[srch_query, srch_k, srch_mode],
         outputs=[srch_status, srch_results],
+        concurrency_limit=APP_EVENT_CONCURRENCY,
+        show_progress="full",
     )
 
     # -- Chat --
@@ -324,11 +400,15 @@ with gr.Blocks(title="🍳 食谱 RAG 系统", fill_width=True) as demo:
         fn=on_chat_msg,
         inputs=[chat_input, chatbot, llm_state, top_k_state],
         outputs=[chatbot, chat_input],
+        concurrency_limit=APP_EVENT_CONCURRENCY,
+        show_progress="full",
     )
     chat_input.submit(
         fn=on_chat_msg,
         inputs=[chat_input, chatbot, llm_state, top_k_state],
         outputs=[chatbot, chat_input],
+        concurrency_limit=APP_EVENT_CONCURRENCY,
+        show_progress="full",
     )
     chat_clear.click(fn=lambda: [], outputs=[chatbot])
 
@@ -353,8 +433,12 @@ with gr.Blocks(title="🍳 食谱 RAG 系统", fill_width=True) as demo:
     pipe_top_k.change(fn=lambda v: v, inputs=[pipe_top_k], outputs=[top_k_state])
 
     # -- Data stats --
-    data_refresh.click(fn=_load_stats, outputs=[data_stats])
-    demo.load(fn=_load_stats, outputs=[data_stats])
+    data_refresh.click(
+        fn=_load_stats,
+        outputs=[data_stats],
+        concurrency_limit=1,
+        show_progress="full",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -363,9 +447,16 @@ with gr.Blocks(title="🍳 食谱 RAG 系统", fill_width=True) as demo:
 
 if __name__ == "__main__":
     import sys
+
+    # Preload model & index so first user request doesn't block
+    _warmup()
+
     share = "--share" in sys.argv
-    demo.launch(
+    demo.queue(
+        default_concurrency_limit=APP_QUEUE_DEFAULT_CONCURRENCY,
+        max_size=APP_QUEUE_MAX_SIZE,
+    ).launch(
         share=share,
-        server_name="127.0.0.1", server_port=7860,
+        server_name=APP_HOST, server_port=APP_PORT,
         theme=theme, css=CUSTOM_CSS,
     )

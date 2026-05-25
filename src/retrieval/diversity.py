@@ -4,10 +4,12 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
+from src.config import MMR_TOPK_DEFAULT, MMR_LAMBDA, SIM_SAME_DISH, SIM_SAME_CATEGORY, SIM_DIFFERENT
+
 
 def diversify_by_category(
     chunks: List[Dict],
-    k: int = 5,
+    k: int = MMR_TOPK_DEFAULT,
 ) -> List[Dict]:
     """Round-robin selection across categories.
 
@@ -48,8 +50,8 @@ def diversify_by_category(
 def mmr_rerank(
     chunks: List[Dict],
     query_emb: np.ndarray,
-    lambda_: float = 0.5,
-    k: int = 5,
+    lambda_: float = MMR_LAMBDA,
+    k: int = MMR_TOPK_DEFAULT,
 ) -> List[Dict]:
     """Maximum Marginal Relevance reranking.
 
@@ -116,8 +118,8 @@ def _chunk_sim(a: Dict, b: Dict) -> float:
 
     # Same dish → very similar
     if ma.get("dish_name") and ma["dish_name"] == mb.get("dish_name"):
-        return 0.9
+        return SIM_SAME_DISH
     # Same category → somewhat similar
     if ma.get("category") and ma["category"] == mb.get("category"):
-        return 0.3
-    return 0.0
+        return SIM_SAME_CATEGORY
+    return SIM_DIFFERENT

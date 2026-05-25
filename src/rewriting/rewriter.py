@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+from src.config import LLM_INTENT_MODEL
 from .intent import IntentResult, classify_intent
 
 
@@ -27,21 +28,13 @@ class RuleQueryRewriter(BaseQueryRewriter):
 
 
 class LLMQueryRewriter(BaseQueryRewriter):
-    """LLM-powered query rewriter (future extension).
-
-    Example usage:
-        rewriter = LLMQueryRewriter(
-            api_key="...",
-            model="claude-sonnet-4-20250506",
-        )
-        result = rewriter.rewrite("今天吃什么")
-    """
+    """LLM-powered query rewriter (future extension)."""
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         api_base: Optional[str] = None,
-        model: str = "claude-sonnet-4-20250506",
+        model: str = LLM_INTENT_MODEL,
     ):
         self.api_key = api_key
         self.api_base = api_base
@@ -49,7 +42,6 @@ class LLMQueryRewriter(BaseQueryRewriter):
 
     def rewrite(self, query: str) -> IntentResult:
         # TODO: call LLM with structured output prompt
-        # For now, fall back to rule-based
         return classify_intent(query)
 
 
