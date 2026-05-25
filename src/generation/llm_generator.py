@@ -44,22 +44,22 @@ class LLMGenerator(Generator):
         else:
             self._fallback_gen = None
 
-    def generate(self, query: str, context: List[Dict], intent: str) -> str:
+    def generate(self, query: str, context: List[Dict], intent: str, target_dish: Optional[str] = None) -> str:
         if not self._client:
-            return self._fallback_gen.generate(query, context, intent) if self._fallback_gen else ""
+            return self._fallback_gen.generate(query, context, intent, target_dish=target_dish) if self._fallback_gen else ""
 
         if not context:
-            return self._empty_response(intent)
+            return self._empty_response(intent, target_dish=target_dish)
 
         try:
-            return self._llm_generate(query, context, intent)
+            return self._llm_generate(query, context, intent, target_dish=target_dish)
         except Exception:
             if self._fallback_gen:
-                return self._fallback_gen.generate(query, context, intent)
+                return self._fallback_gen.generate(query, context, intent, target_dish=target_dish)
             return ""
 
-    def _llm_generate(self, query: str, context: List[Dict], intent: str) -> str:
-        system_prompt = self._build_system_prompt(intent)
+    def _llm_generate(self, query: str, context: List[Dict], intent: str, target_dish: Optional[str] = None) -> str:
+        system_prompt = self._build_system_prompt(intent, target_dish=target_dish)
         context_text = self._format_context(context, intent)
         user_prompt = self._build_user_prompt(query, context_text, intent)
 
@@ -76,7 +76,7 @@ class LLMGenerator(Generator):
 
         return resp.choices[0].message.content or ""
 
-    def _build_system_prompt(self, intent: str) -> str:
+    def _build_system_prompt(self, intent: str, target_dish: Optional[str] = None) -> str:
         base = "你是一个中文烹饪助手，根据检索到的食谱信息回答用户的问题。\n\n"
         base += "要求：\n"
         base += "1. 只使用提供的上下文信息回答，不要编造菜谱\n"
@@ -88,9 +88,27 @@ class LLMGenerator(Generator):
         if intent == "recommendation":
             base += "\n推荐场景：给出推荐理由，列出菜品名称、类别、难度和预估卡路里。"
         elif intent == "howto":
-            base += "\n步骤说明：按顺序整理操作步骤，保持关键细节（火候、时间、用量）。"
+            base += "\n步骤说明：检查检索到的上下文中是否包含用户询问的菜名。"
+            if target_dish:
+                base += f"\n用户询问「{target_dish}」的做法。"
+            base += (
+                "\n- 如果上下文中包含该菜品的操作步骤，则按顺序整理回答。\n"
+                "- 如果上下文中没有该菜品的信息，请如实回答"
+                "「抱歉，我不知道这道菜的做法」，"
+                "然后根据检索到的其他菜品推荐相似的选择。\n"
+                "- 不要强行将其他菜品的步骤套用到用户询问的菜品上。"
+            )
         elif intent == "ingredient":
-            base += "\n原料清单：整理列出所有必备原料和工具，标注用量。"
+            base += "\n原料清单：检查检索到的上下文中是否包含用户询问的菜名。"
+            if target_dish:
+                base += f"\n用户询问「{target_dish}」的原料信息。"
+            base += (
+                "\n- 如果上下文中包含该菜品的原料清单，则整理列出。\n"
+                "- 如果上下文中没有该菜品的信息，请如实回答"
+                "「抱歉，我不知道这道菜的原料信息」，"
+                "然后根据检索到的其他菜品推荐相似的选择。\n"
+                "- 不要强行将其他菜品的原料信息套用到用户询问的菜品上。"
+            )
         elif intent == "factual":
             base += "\n知识回答：根据上下文直接回答，如信息不足则说明。"
 
@@ -128,7 +146,12 @@ class LLMGenerator(Generator):
         return "\n---\n".join(sections)
 
     @staticmethod
-    def _empty_response(intent: str) -> str:
+    def _empty_response(intent: str, target_dish: Optional[str] = None) -> str:
+        if target_dish:
+            if intent == "howto":
+                return f"抱歉，我不知道「{target_dish}」的做法。"
+            if intent == "ingredient":
+                return f"抱歉，我不知道「{target_dish}」的原料信息。"
         messages = {
             "recommendation": "抱歉，没有找到符合条件的菜品推荐。",
             "howto": "抱歉，没有找到该菜品的做法信息。",

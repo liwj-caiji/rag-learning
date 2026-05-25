@@ -85,8 +85,12 @@ class RAGPipeline:
         log.info("Retrieve: %d chunks | %.2fs", len(context), time.time() - t1)
 
         t2 = time.time()
-        answer = self.generator.generate(query, context, intent_result.intent)
-        log.info("Generate: %d chars | %.2fs", len(answer), time.time() - t2)
+        answer = self.generator.generate(
+            query, context, intent_result.intent,
+            target_dish=intent_result.target_dish,
+        )
+        log.info("Generate: %d chars | %.2fs | target=%s",
+                 len(answer), time.time() - t2, intent_result.target_dish)
 
         log.info("Total: %.2fs", time.time() - t0)
         return answer
@@ -170,7 +174,10 @@ class RAGPipeline:
         """Run pipeline and return detailed trace for debugging."""
         intent_result = self.rewriter.rewrite(query)
         context = self._retrieve(intent_result, top_k, query)
-        answer = self.generator.generate(query, context, intent_result.intent)
+        answer = self.generator.generate(
+            query, context, intent_result.intent,
+            target_dish=intent_result.target_dish,
+        )
 
         return {
             "query": query,
