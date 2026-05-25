@@ -12,6 +12,7 @@ from src.config import (
     PIPELINE_HOWTO_K, PIPELINE_HOWTO_DENSE_K, PIPELINE_HOWTO_SPARSE_K,
     PIPELINE_INGREDIENT_K, PIPELINE_INGREDIENT_DENSE_K, PIPELINE_INGREDIENT_SPARSE_K,
 )
+from ..preprocess.config import DISHES_DIR
 from ..rewriting import IntentResult, QueryRewriter, LLMIntentClassifier
 from ..retrieval import hybrid_search, recommend_dishes
 from .base import Generator
@@ -66,6 +67,67 @@ class RAGPipeline:
     def _make_llm_generator(model: str, api_base: str) -> Generator:
         from .llm_generator import LLMGenerator
         return LLMGenerator(model=model, api_base=api_base)
+
+    @staticmethod
+    def _enrich_with_full_recipe(
+        results: List[Dict],
+        dish_query: str,
+    ) -> Optional[List[Dict]]:
+        """Load full source file(s) and prepend complete recipe content.
+
+        When the target dish is identified, this method reads the original
+        markdown file so the LLM receives the full recipe (description +
+        ingredients + steps) rather than isolated chunk snippets.
+        """
+        if not dish_query:
+            return None
+
+        # Collect source file paths from chunks matching the target dish
+        source_paths = set()
+        for item in results:
+            chunk = item.get("chunk", item)
+            meta = chunk.get("metadata", {})
+            if dish_query in meta.get("dish_name", ""):
+                path = meta.get("path", "")
+                if path:
+                    source_paths.add(path)
+
+        if not source_paths:
+            return None
+
+        enriched = list(results)  # keep original chunks as well
+
+        for rel_path in source_paths:
+            full_path = os.path.join(DISHES_DIR, rel_path)
+            if not os.path.exists(full_path):
+                log.warning("Source file not found: %s", full_path)
+                continue
+
+            try:
+                with open(full_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except Exception as e:
+                log.warning("Failed to read source file %s: %s", full_path, e)
+                continue
+
+            # Derive dish name from path
+            dish_name = os.path.splitext(os.path.basename(rel_path))[0]
+
+            enriched.insert(0, {
+                "chunk": {
+                    "text": content,
+                    "level": "full_recipe",
+                    "metadata": {
+                        "dish_name": dish_name,
+                        "path": rel_path,
+                        "section_type": "完整食谱",
+                    },
+                },
+            })
+            log.info("Enriched context with full recipe: %s (len=%d)",
+                     rel_path, len(content))
+
+        return enriched
 
     def run(
         self,
@@ -130,13 +192,17 @@ class RAGPipeline:
                 )
             ]
             if op_results:
-                return op_results[:top_k]
-            # Fallback: dish-level chunks for the target dish
-            dish_results = [
-                r for r in results
-                if dish_query and dish_query in r["chunk"]["metadata"].get("dish_name", "")
-            ]
-            return dish_results[:top_k] if dish_results else results[:top_k]
+                chosen = op_results[:top_k]
+            else:
+                # Fallback: dish-level chunks for the target dish
+                dish_results = [
+                    r for r in results
+                    if dish_query and dish_query in r["chunk"]["metadata"].get("dish_name", "")
+                ]
+                chosen = dish_results[:top_k] if dish_results else results[:top_k]
+            # Enrich with full recipe file for complete context
+            enriched = self._enrich_with_full_recipe(chosen, dish_query)
+            return enriched if enriched else chosen
 
         if intent == "ingredient":
             dish_query = intent_result.target_dish or ""
@@ -156,12 +222,16 @@ class RAGPipeline:
                 )
             ]
             if ing_results:
-                return ing_results[:top_k]
-            dish_results = [
-                r for r in results
-                if dish_query and dish_query in r["chunk"]["metadata"].get("dish_name", "")
-            ]
-            return dish_results[:top_k] if dish_results else results[:top_k]
+                chosen = ing_results[:top_k]
+            else:
+                dish_results = [
+                    r for r in results
+                    if dish_query and dish_query in r["chunk"]["metadata"].get("dish_name", "")
+                ]
+                chosen = dish_results[:top_k] if dish_results else results[:top_k]
+            # Enrich with full recipe file for complete context
+            enriched = self._enrich_with_full_recipe(chosen, dish_query)
+            return enriched if enriched else chosen
 
         # Fallback: generic hybrid search
         return hybrid_search(query, k=top_k)
