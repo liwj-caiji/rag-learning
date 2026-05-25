@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from typing import Dict, List, Optional
 
-from ..rewriting import IntentResult, QueryRewriter
+from ..rewriting import IntentResult, QueryRewriter, LLMIntentClassifier
 from ..retrieval import hybrid_search, recommend_dishes
 from .base import Generator
 from .template import TemplateGenerator
@@ -17,15 +18,45 @@ class RAGPipeline:
         pipeline = RAGPipeline()
         answer = pipeline.run("今天吃什么")
         print(answer)
+
+    With LLM:
+        pipeline = RAGPipeline(use_llm=True)
+        answer = pipeline.run("麻婆豆腐怎么做")
     """
 
     def __init__(
         self,
         rewriter: Optional[QueryRewriter] = None,
         generator: Optional[Generator] = None,
+        use_llm: bool = False,
+        llm_model: str = "deepseek-v4-flash",
+        llm_api_base: str = "https://api.deepseek.com",
     ):
-        self.rewriter = rewriter or QueryRewriter()
-        self.generator = generator or TemplateGenerator()
+        if use_llm and (not rewriter or not generator):
+            api_key = os.environ.get("DEEPSEEK_API_KEY")
+            if not api_key:
+                raise ValueError(
+                    "DEEPSEEK_API_KEY environment variable is required "
+                    "when use_llm=True"
+                )
+
+        self.rewriter = rewriter or (
+            LLMIntentClassifier(model=llm_model, api_base=llm_api_base)
+            if use_llm
+            else QueryRewriter()
+        )
+        self.generator = generator or (
+            self._make_llm_generator(llm_model, llm_api_base)
+            if use_llm
+            else TemplateGenerator()
+        )
+        self._llm_model = llm_model
+        self._llm_api_base = llm_api_base
+
+    @staticmethod
+    def _make_llm_generator(model: str, api_base: str) -> Generator:
+        from .llm_generator import LLMGenerator
+        return LLMGenerator(model=model, api_base=api_base)
 
     def run(
         self,

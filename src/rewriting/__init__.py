@@ -1,5 +1,6 @@
 from .intent import IntentResult, IntentType
 from .rewriter import QueryRewriter, RuleQueryRewriter, LLMQueryRewriter
+from .llm_intent import LLMIntentClassifier
 
 __all__ = [
     "IntentResult",
@@ -7,4 +8,5 @@ __all__ = [
     "QueryRewriter",
     "RuleQueryRewriter",
     "LLMQueryRewriter",
+    "LLMIntentClassifier",
 ]
