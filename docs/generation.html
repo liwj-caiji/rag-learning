@@ -5,192 +5,138 @@
 <title>Generation — 答案生成 & 系统架构</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <style>
-  body { background: #f8f9fa; font-family: 'Noto Sans SC', sans-serif; margin: 0; padding: 30px; }
-  .container { max-width: 1100px; margin: 0 auto; }
-  h1 { color: #1a1a2e; text-align: center; font-size: 24px; margin-bottom: 8px; }
-  .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 30px; }
-  .mermaid-box { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); padding: 30px; margin-bottom: 24px; overflow-x: auto; }
-  .cfg-ref { background: #e8f4fd; border-radius: 8px; padding: 14px 18px; font-size: 13px; color: #333; }
-  .cfg-ref code { background: #d0e8f7; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  body { background: #f8f9fa; font-family: 'Noto Sans SC', sans-serif; margin: 0; padding: 20px; }
+  .container { max-width: 100%; margin: 0 auto; }
+  h1 { color: #1a1a2e; text-align: center; font-size: 22px; margin: 0 0 4px 0; }
+  .subtitle { text-align: center; color: #666; font-size: 13px; margin: 0 0 20px 0; }
+  .mermaid-box { background: #fff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.07); padding: 20px; margin-bottom: 18px; overflow-x: auto; }
+  .mermaid-box svg { max-width: none; }
+  .cfg-ref { background: #e8f4fd; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #333; line-height: 1.7; }
+  .cfg-ref code { background: #d0e8f7; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
   .cfg-ref strong { color: #1a73e8; }
-  .two-col { display: flex; gap: 24px; }
-  .col { flex: 1; }
-  @media (max-width: 800px) { .two-col { flex-direction: column; } }
 </style>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    flowchart: { useMaxWidth: false, htmlLabels: true, padding: 8 },
+    themeVariables: { fontSize: '14px' }
+  });
+</script>
 </head>
 <body>
 <div class="container">
 
 <h1>答案生成 & 系统架构</h1>
-<p class="subtitle">RAGPipeline Pipeline → Template / LLM 双模式生成</p>
+<p class="subtitle">RAGPipeline → Template / LLM 双模式生成</p>
 
-<div class="two-col">
-  <div class="col">
-    <div class="mermaid-box" style="margin-bottom:0;">
-    <pre class="mermaid" style="height:580px;">
+<div class="mermaid-box">
+<pre class="mermaid">
 flowchart TD
-    %% 样式
     classDef config fill:#e8f4fd,stroke:#90caf9,stroke-dasharray:5,5,color:#1565c0
-    classDef process fill:#e8f5e9,stroke:#81c784,color:#2e7d32
-    classDef branch fill:#fff8e1,stroke:#ffd54f,color:#f57f17
-    classDef result fill:#fff3e0,stroke:#ffb74d,color:#e65100
-    classDef llm fill:#e8eaf6,stroke:#9fa8da,color:#283593
+    classDef proc fill:#e8f5e9,stroke:#81c784,color:#2e7d32
+    classDef cond fill:#fff8e1,stroke:#ffd54f,color:#f57f17
+    classDef out fill:#fff3e0,stroke:#ffb74d,color:#e65100
 
     subgraph PIPE["RAGPipeline"]
-        direction TB
+        P0["rewriter → IntentResult"] --> P1["_retrieve 意图路由"]
+        P1 --> P2{"intent"}
 
-        P0["rewriter.rewrite(query)\n→ IntentResult"] --> P1["_retrieve()\n基于意图选择策略"]
+        P2 -->|"recommend"| P3["recommend_dishes"]
+        P2 -->|"howto"| P4["hybrid_search\n'{dish} 操作'"]
+        P2 -->|"ingredient"| P5["hybrid_search\n'{dish} 原料'"]
+        P2 -->|"factual"| P6["hybrid_search\nquery"]
 
-        P1 --> P2{"intent?"}
+        P4 --> P4f["后过滤 操作章节"]
+        P5 --> P5f["后过滤 原料章节"]
 
-        P2 -->|"recommendation"| P3["recommend_dishes(\n  rewritten,\n  k=top_k,\n  filters=filters,\n  probes=probes)"]
-
-        P2 -->|"howto"| P4["hybrid_search(\n  '{dish} 操作',\n  k=PIPELINE_HOWTO_K,\n  dense_k=PIPELINE_HOWTO_DENSE_K,\n  sparse_k=PIPELINE_HOWTO_SPARSE_K)"]
-        P4 --> P4f["后过滤: section_type='操作'\n且 dish_name 匹配"]
-        P4f --> P4g{"有结果?"}
-        P4g -->|"是"| P4h["返回 top_k"]
-        P4g -->|"否"| P4i["回退: dish_name 匹配\n或 原始结果"]
-
-        P2 -->|"ingredient"| P5["hybrid_search(\n  '{dish} 必备原料和工具',\n  k=PIPELINE_INGREDIENT_K,\n  dense_k=PIPELINE_INGREDIENT_DENSE_K,\n  sparse_k=PIPELINE_INGREDIENT_SPARSE_K)"]
-        P5 --> P5f["后过滤: section_type='必备原料和工具'\n且 dish_name 匹配"]
-        P5f --> P5g{"有结果?"}
-        P5g -->|"是"| P5h["返回 top_k"]
-        P5g -->|"否"| P5i["回退: dish_name 匹配\n或 原始结果"]
-
-        P2 -->|"factual / 其他"| P6["hybrid_search(query, k=top_k)"]
-
-        P3 & P4h & P4i & P5h & P5i & P6 --> P7["context: List[Dict]\n（检索到的分块）"]
-
-        P7 --> P8{"generator 类型?"}
+        P3 & P4f & P5f & P6 --> P7["context含完整食谱"]
+        P7 --> P8{"generator"}
     end
 
-    subgraph TEMPLATE["TemplateGenerator（规则模式）"]
-        direction TB
-        T1{"intent?"}
-        T1 -->|"recommendation"| T2["_render_recommendation\n枚举菜品: 名称/类别/难度/热量"]
-        T1 -->|"howto"| T3["_render_howto\n按菜名分组 → 操作步骤"]
-        T1 -->|"ingredient"| T4["_render_ingredient\n素材清单整理"]
-        T1 -->|"其他"| T5["_render_generic\n分块预览"]
+    subgraph TPL["TemplateGenerator 规则"]
+        T1{"intent"}
+        T1 -->|"recommend"| T2["枚举菜品信息"]
+        T1 -->|"howto"| T3["按菜名分组步骤"]
+        T1 -->|"ingredient"| T4["原料清单"]
+        T1 -->|"其他"| T5["分块预览"]
     end
 
-    subgraph LLM_GEN["LLMGenerator（LLM 模式）"]
-        direction TB
-        L0{"API Key / Client\n初始化成功?"}
-        L0 -->|"否"| L0f["回退到 TemplateGenerator"]
-        L0 -->|"是"| L1{"context 为空?"}
-        L1 -->|"是"| L2["意图特定空消息\n（4 种）"]
-        L1 -->|"否"| L3["_build_system_prompt(intent)\n通用规则 + 意图补充"]
-        L3 --> L4["_format_context(context)\n[1] dish - section / text"]
-        L4 --> L5["ChatCompletion.create\nmodel=LLM_GEN_MODEL\n temperature=LLM_GEN_TEMPERATURE\n max_tokens=LLM_GEN_MAX_TOKENS"]
-        L5 --> L6{"成功?"}
-        L6 -->|"是"| L7["返回 LLM 生成文本"]
-        L6 -->|"异常"| L0f
+    subgraph LLM["LLMGenerator LLM"]
+        L0{"Client?"}
+        L0 -->|"N"| L0f["→回退Template"]
+        L0 -->|"Y"| L1{"context?"}
+        L1 -->|"空"| L2["空消息"]
+        L1 -->|"有"| L3["system_prompt"]
+        L3 --> L4["format_context"]
+        L4 --> L5["ChatCompletion"]
+        L5 --> L6{"OK?"}
+        L6 -->|"Y"| L7["LLM文本"]
+        L6 -->|"N"| L0f
     end
 
-    P8 -->|"模式"| TEMPLATE
-    P8 -->|"LLM 模式"| LLM_GEN
+    P8 -->|"规则"| TPL
+    P8 -->|"LLM"| LLM
+    T2 & T3 & T4 & T5 & L7 & L0f --> R["最终答案"]
 
-    T2 & T3 & T4 & T5 & L7 & L0f --> FINAL["最终答案\n（str）"]
+    CFG1["HOWTO_K=20 D/S=50"] -.-> P4
+    CFG2["INGR_K=20 D/S=50"] -.-> P5
+    CFG3["model=deepseek-v4-flash"] -.-> L5
+    CFG4["timeout=15s t=0.3"] -.-> L5
 
-    CFG1["PIPELINE_HOWTO_K=20\nDENSE/SPARSE=50"] -.-> P4
-    CFG2["PIPELINE_INGREDIENT_K=20\nDENSE/SPARSE=50"] -.-> P5
-    CFG3["LLM_GEN_MODEL = deepseek-v4-flash"] -.-> L5
-    CFG4["LLM_GEN_TIMEOUT = 15s"] -.-> L5
-    CFG5["LLM_GEN_TEMPERATURE = 0.3"] -.-> L5
-    CFG6["LLM_GEN_MAX_TOKENS = 2048"] -.-> L5
+    class CFG1,CFG2,CFG3,CFG4 config
+    class P0,P3,P4,P5,P6 proc
+    class P2,P8,T1,L0,L1,L6 cond
+    class T2,T3,T4,T5,L2,L3,L4,L7 out
+    class R out
+</pre>
+</div>
 
-    class CFG1,CFG2,CFG3,CFG4,CFG5,CFG6 config
-    class P0,P3,P4,P5,P6 process
-    class P2,P4g,P5g,P8,T1,L0,L1,L6 branch
-    class T2,T3,T4,T5,L2,L3,L4,L7 result
-    class FINAL result
-    </pre>
-    </div>
-  </div>
-  <div class="col">
-    <div class="mermaid-box" style="margin-bottom:0;">
-    <pre class="mermaid" style="height:580px;">
+<div class="mermaid-box">
+<pre class="mermaid">
 flowchart TD
-    %% 样式
     classDef ui fill:#e3f2fd,stroke:#64b5f6,color:#1565c0
-    classDef process fill:#e8f5e9,stroke:#81c784,color:#2e7d32
+    classDef proc fill:#e8f5e9,stroke:#81c784,color:#2e7d32
     classDef data fill:#fff3e0,stroke:#ffb74d,color:#e65100
-    classDef external fill:#f3e5f5,stroke:#ce93d8,color:#6a1b9a
-    classDef config fill:#e8f4fd,stroke:#90caf9,stroke-dasharray:5,5,color:#1565c0
+    classDef cfg fill:#e8f4fd,stroke:#90caf9,stroke-dashstyle:5,5,color:#1565c0
 
-    subgraph GRADIO["Gradio Web UI（app.py）"]
-        TAB1["Pipeline 总览\n查询 → 意图 → 检索 → 答案"]
-        TAB2["检索演示\n稠密/稀疏/混合对比"]
-        TAB3["数据概览\n数据集统计"]
-        TAB4["对话助手\nChatbot 交互"]
+    subgraph UI["Gradio Web UI"]
+        T1["Pipeline总览"] --- T2["检索演示"]
+        T2 --- T3["数据概览"]
+        T3 --- T4["对话助手"]
     end
 
-    subgraph PREPROCESS["Preprocess\nRecipeSplitter → IndexBuilder"]
-        P1["collect_all_recipes()\n363 个食谱文件"]
-        P2["RecipeSplitter.split()\nL1-dish / L2-section / L3-subsection"]
-        P3["build_index()\nFAISS + BM25 + chunks.pkl"]
+    subgraph PRE["Preprocess"]
+        P1["collect 363文件"] --> P2["split L1/L2/L3"] --> P3["build_index"]
     end
 
-    subgraph RETRIEVAL["Retrieval\nHybrid Search"]
-        R1["dense_search\nFAISS + text2vec-base-chinese"]
-        R2["sparse_search\nBM25 + jieba 分词"]
-        R3["hybrid_search\nRRF 融合"]
-        R4["recommend_dishes\n多探针 + MMR 重排序"]
-        R5["apply_filters\n难度/类别/热量/层级"]
+    subgraph RET["Retrieval"]
+        R1["dense FAISS"] & R2["sparse BM25"] --> R3["RRF融合"] --> R4["MMR推荐"] --> R5["filters"]
     end
 
-    subgraph REWRITING["Rewriting\nIntent Classification"]
-        W1["RuleQueryRewriter\n关键词匹配 → 规则改写"]
-        W2["LLMIntentClassifier\nDeepSeek API → JSON 解析"]
-        W3["回退链: LLM → Rules"]
+    subgraph REW["Rewriting"]
+        W1["规则"] & W2["LLM"] --> W3["回退链"]
     end
 
-    subgraph GENERATION["Generation\nAnswer Generation"]
-        G1["TemplateGenerator\n意图模板渲染"]
-        G2["LLMGenerator\nDeepSeek API + 检索上下文"]
+    subgraph GEN["Generation"]
+        G1["Template"] & G2["LLM"]
     end
 
-    subgraph CONFIG["src/config.py（集中配置）"]
-        C1["Paths & Embedding"]
-        C2["Retrieval (k / RRF / MMR)"]
-        C3["LLM (model / timeout / temp)"]
-        C4["App (host / port / queue)"]
+    subgraph CFG["config.py"]
+        C1["Paths"] & C2["Retrieval"] & C3["LLM"] & C4["App"]
     end
 
-    TAB1 --> REWRITING
-    TAB1 --> RETRIEVAL
-    TAB1 --> GENERATION
-    TAB4 --> REWRITING
-    TAB4 --> RETRIEVAL
-    TAB4 --> GENERATION
+    T1 & T4 --> REW & RET & GEN
+    PRE --> P3 --> RET
+    REW --> RET
+    GEN --> G1 & G2
+    CFG -.-> PRE & RET & REW & GEN & UI
 
-    REWRITING --> W3
-    W1 --> RETRIEVAL
-    W2 --> RETRIEVAL
-
-    RETRIEVAL --> R3
-    R3 --> R4
-    R4 --> R5
-
-    GENERATION --> G1
-    GENERATION --> G2
-
-    PREPROCESS --> P3
-    P3 --> RETRIEVAL
-
-    CONFIG -.-> PREPROCESS
-    CONFIG -.-> RETRIEVAL
-    CONFIG -.-> REWRITING
-    CONFIG -.-> GENERATION
-    CONFIG -.-> GRADIO
-
-    class TAB1,TAB2,TAB3,TAB4 ui
-    class P1,P2,P3,R1,R2,R3,R4,R5,W1,W2 process
+    class T1,T2,T3,T4 ui
+    class P1,P2,P3,R1,R2,R3,R4,R5,W1,W2,W3 proc
     class G1,G2 data
-    class C1,C2,C3,C4 config
-    </pre>
-    </div>
-  </div>
+    class C1,C2,C3,C4 cfg
+</pre>
 </div>
 
 <div class="cfg-ref">

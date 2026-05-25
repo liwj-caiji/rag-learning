@@ -1,5 +1,59 @@
 # Changelog
 
+## 2026-05-26 — Mermaid 示意图布局优化 & 功能增强
+
+### 功能增强
+
+#### 1. 查询意图类别关键词英文化
+- **文件**: `src/rewriting/intent.py`
+- 将 `_CATEGORY_KEYWORDS` 字典键从中文（"素菜"/"肉菜"/"汤"等）改为英文（"vegetable_dish"/"meat_dish"/"soup"等），避免内部编码问题
+
+#### 2. 标题分组精细控制
+- **文件**: `src/preprocess/splitter.py`
+- `_group_by_headings()` 新增 `split_level` 参数，控制按几级标题切分，修复 L3 子章节拆分逻辑
+
+#### 3. 完整食谱上下文注入
+- **文件**: `src/generation/pipeline.py` / `src/generation/llm_generator.py` / `src/generation/template.py`
+- 当检索到目标菜品时，自动读取原始 `.md` 源文件，将完整食谱内容作为 "完整食谱" 条目前置到 LLM 上下文
+- LLM prompt 增加对「完整食谱」条目的使用指示
+- 未精确命中时生成"不知道"+推荐相似菜品（Template 和 LLM 双模式）
+
+### Mermaid 示意图布局优化
+
+#### 1. 整体布局调整
+- 所有 diagram 去除容器宽度限制（`max-width: 100%`），SVG 按自然大小渲染
+- `useMaxWidth: false` 取消 Mermaid 自动缩放，保留原始分辨率
+- 节点文字极度精简，减少子图内部空白
+- `overflow-x: auto` 支持横向滚动查看超宽部分
+
+#### 2. `docs/retrieval.html`
+- 重组子图：CACHE → DENSE+SPARSE → FUSION → RECOMMEND 纵向排列
+- MMR 细节作为侧边子图附着
+- 配置引用精简为一行标注
+
+#### 3. `docs/rewriting.html`
+- LLM 路径与规则路径双子图重新排列，合并冗余节点
+- 回退路径使用虚线箭头标注
+
+#### 4. `docs/generation.html`
+- 移除两列布局，RAGPipeline 与系统架构图上下排列各占满宽
+- 文字大幅精简，子图内边距压缩
+
+### 涉及文件
+
+| 文件 | 改动类型 |
+|------|----------|
+| `docs/retrieval.html` | 修改（布局优化） |
+| `docs/rewriting.html` | 修改（布局优化） |
+| `docs/generation.html` | 修改（布局优化） |
+| `docs/CHANGELOG.md` | 修改（新增本条） |
+| `CHANGELOG.md` | 删除（迁移至 docs/） |
+| `src/preprocess/splitter.py` | 修改（标题分组精细控制） |
+| `src/rewriting/intent.py` | 修改（类别关键词英文化） |
+| `src/generation/pipeline.py` | 修改（完整食谱上下文注入） |
+| `src/generation/llm_generator.py` | 修改（prompt 优化） |
+| `src/generation/template.py` | 修改（"不知道"+推荐） |
+
 ## 2026-05-25 — UI 卡死修复 & 配置集中管理
 
 ### 问题修复

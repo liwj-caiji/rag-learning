@@ -61,8 +61,13 @@ class RecipeSplitter:
             result.pop()
         return result
 
-    def _group_by_headings(self, lines: List[str]) -> List[Dict]:
+    def _group_by_headings(self, lines: List[str], split_level: int = 2) -> List[Dict]:
         """Split lines into sections by heading boundaries.
+
+        Args:
+            split_level: Only headings at this level or higher (lower number)
+                         create new section boundaries. Default 2: # and ## split.
+                         Pass 3 to also split on ### (used for subsection splitting).
 
         Returns list of dicts:
           {level: int, heading: str, content_lines: List[str]}
@@ -76,19 +81,27 @@ class RecipeSplitter:
         for line in lines:
             m = heading_re.match(line)
             if m:
-                # Save previous section
-                if current is not None:
-                    sections.append(current)
                 level = len(m.group(1))
                 heading = m.group(2).strip()
-                current = {
-                    "level": level,
-                    "heading": heading,
-                    "content_lines": [line],
-                }
+                if current is not None and level <= split_level:
+                    sections.append(current)
+                    current = {
+                        "level": level,
+                        "heading": heading,
+                        "content_lines": [line],
+                    }
+                else:
+                    # Sub-heading or first heading: keep in current section
+                    if current is None:
+                        current = {
+                            "level": level,
+                            "heading": heading,
+                            "content_lines": [line],
+                        }
+                    else:
+                        current["content_lines"].append(line)
             else:
                 if current is None:
-                    # Content before any heading – treat as level-0 preamble (shouldn't happen in our data)
                     current = {
                         "level": 0,
                         "heading": "",
@@ -147,7 +160,7 @@ class RecipeSplitter:
 
     def _make_l3_chunks(self, sec: Dict, dish_name: str) -> List[Dict]:
         """Split a ## 操作 section into ###-level sub-chunks."""
-        subs = self._group_by_headings(sec["content_lines"])
+        subs = self._group_by_headings(sec["content_lines"], split_level=3)
         # Filter to level-3 subsections only
         chunks = []
         for sub in subs:

@@ -5,118 +5,102 @@
 <title>Retrieval — 混合检索模块</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <style>
-  body { background: #f8f9fa; font-family: 'Noto Sans SC', sans-serif; margin: 0; padding: 30px; }
-  .container { max-width: 1100px; margin: 0 auto; }
-  h1 { color: #1a1a2e; text-align: center; font-size: 24px; margin-bottom: 8px; }
-  .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 30px; }
-  .mermaid-box { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); padding: 30px; margin-bottom: 24px; overflow-x: auto; }
-  .cfg-ref { background: #e8f4fd; border-radius: 8px; padding: 14px 18px; font-size: 13px; color: #333; }
-  .cfg-ref code { background: #d0e8f7; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  body { background: #f8f9fa; font-family: 'Noto Sans SC', sans-serif; margin: 0; padding: 20px; }
+  .container { max-width: 100%; margin: 0 auto; }
+  h1 { color: #1a1a2e; text-align: center; font-size: 22px; margin: 0 0 4px 0; }
+  .subtitle { text-align: center; color: #666; font-size: 13px; margin: 0 0 20px 0; }
+  .mermaid-box { background: #fff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.07); padding: 20px; margin-bottom: 18px; overflow-x: auto; }
+  .mermaid-box svg { max-width: none; }
+  .cfg-ref { background: #e8f4fd; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #333; line-height: 1.7; }
+  .cfg-ref code { background: #d0e8f7; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
   .cfg-ref strong { color: #1a73e8; }
 </style>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    flowchart: { useMaxWidth: false, htmlLabels: true, padding: 8 },
+    themeVariables: { fontSize: '14px' }
+  });
+</script>
 </head>
 <body>
 <div class="container">
 
 <h1>混合检索模块</h1>
-<p class="subtitle">Hybrid Search — Dense (FAISS) + Sparse (BM25) → RRF Fusion → MMR Rerank → Filters</p>
+<p class="subtitle">Dense (FAISS) + Sparse (BM25) → RRF Fusion → MMR Rerank → Filters</p>
 
 <div class="mermaid-box">
 <pre class="mermaid">
 flowchart TD
-    %% 样式
     classDef config fill:#e8f4fd,stroke:#90caf9,stroke-dasharray:5,5,color:#1565c0
-    classDef process fill:#e8f5e9,stroke:#81c784,color:#2e7d32
-    classDef branch fill:#fff8e1,stroke:#ffd54f,color:#f57f17
-    classDef result fill:#fff3e0,stroke:#ffb74d,color:#e65100
-    classDef cache fill:#f3e5f5,stroke:#ce93d8,color:#6a1b9a,stroke-dasharray:4,4
+    classDef proc fill:#e8f5e9,stroke:#81c784,color:#2e7d32
+    classDef cond fill:#fff8e1,stroke:#ffd54f,color:#f57f17
+    classDef out fill:#fff3e0,stroke:#ffb74d,color:#e65100
 
-    subgraph CACHE["_RETRIEVAL_CACHE（模块级惰性加载）"]
-        D1["faiss index"] --- D2["bm25 payload"]
-        D2 --- D3["chunks list"]
-        D3 --- D4["SentenceTransformer model"]
+    CACHE["_RETRIEVAL_CACHE\nfaiss · bm25 · chunks · model"] --> DENSE
+    CACHE --> SPARSE
+
+    subgraph DENSE["dense_search FAISS"]
+        A1["encode 768d"] --> A2["L2 norm"] --> A3["search"] --> A4["top K"]
     end
 
-    subgraph DENSE["稠密检索 dense_search"]
-        direction LR
-        A1["SentenceTransformer.encode(query)\n768 维向量"] --> A2["faiss.normalize_L2"]
-        A2 --> A3["faiss.index.search\n（IndexFlatIP）"]
-        A3 --> A4["按 score 降序\n取 top DENSE_CANDIDATES_K"]
+    subgraph SPARSE["sparse_search BM25"]
+        B1["jieba分词"] --> B2["bm25.scores"] --> B3["top K"] --> B4["过滤阈值"]
     end
 
-    subgraph SPARSE["稀疏检索 sparse_search"]
-        direction LR
-        B1["jieba.lcut(query)\nchinese_tokenize"] --> B2["bm25.get_scores"]
-        B2 --> B3["np.argsort 取 top\nSPARSE_CANDIDATES_K"]
-        B3 --> B4["过滤 score ≤\nBM25_SCORE_MIN 的结果"]
+    subgraph FUSION["RRF hybrid_search"]
+        C1["dense_ranks + sparse_ranks"] --> C2["RRF=Σ1/(K+r)"] --> C3["top HYBRID_TOPK"]
     end
 
-    subgraph FUSION["RRF 融合 hybrid_search"]
-        direction TB
-        C1["dense_ranks: id→rank"] & C2["sparse_ranks: id→rank"] --> C3["融合 all_ids"]
-        C3 --> C4["RRF_score = Σ 1/(RRF_K + rank)"]
-        C4 --> C5["按 RRF_score 降序\n取 top HYBRID_TOPK_DEFAULT"]
-    end
-
-    subgraph RECOMMEND["多探针推荐 recommend_dishes"]
-        direction TB
-        E1["(probes or []) + [query]\n取前 RECOMMEND_MAX_PROBES 个"] --> E2
-        E2["hybrid_search(sq,\nk=RECOMMEND_PROBE_CANDIDATES)"]
-        E2 --> E3["仅保留 level='dish'\n按 dish_name 去重"]
-        E3 --> E4{"有 filters?"}
-        E4 -->|"是"| E5["apply_filters\n· difficulty\n· category\n· calories\n· level\n· target_dish"]
-        E4 -->|"否"| E6["直接进入排序"]
+    subgraph RECOMMEND["recommend_dishes 多探针推荐"]
+        E1["probes+query"] --> E2["hybrid_search per probe"] --> E3["去重 dish-level"]
+        E3 --> E4{"filters?"}
+        E4 -->|Y| E5["apply_filters"]
+        E4 -->|N| E6{"diversify?"}
         E5 --> E6
-        E6 --> E7{"diversify=True\n且候选数>1?"}
-        E7 -->|"是"| E8["尝试 mmr_rerank\nlambda=MMR_LAMBDA"]
-        E8 --> E9{"MMR 成功?"}
-        E9 -->|"是"| E10["返回 MMR 排序结果"]
-        E9 -->|"否"| E11["回退: diversify_by_category\n类别轮询"]
-        E7 -->|"否"| E12["简单按 score 降序"]
-        E10 --> E13["返回 top RECOMMEND_TOPK_DEFAULT"]
-        E11 --> E13
-        E12 --> E13
+        E6 -->|Y| E7["MMR rerank"]
+        E6 -->|N| E8["score降序"]
+        E7 --> E9["top RECOMMEND"]
+        E8 --> E9
     end
 
-    subgraph MMR_DETAIL["MMR 重排序细节"]
-        M1["MMR = λ·rel + (1-λ)·(1-maxSim)"]
-        M2["_chunk_sim 启发式:\n同菜=0.9 同类=0.3 不同=0.0"]
+    subgraph MMR["MMR"]
+        M1["λ·rel+(1-λ)·maxSim"]
+        M2["同菜0.9同类0.3其他0"]
     end
 
     A4 --> C1
-    B4 --> C2
-    C5 --> E2
-    M1 -.-> E8
-    M2 -.-> M1
+    B4 --> C1
+    C3 --> E2
+    M2 -.-> M1 -.-> E7
 
-    %% 配置引用
-    CFG1["DENSE_CANDIDATES_K = 20"] -.-> A3
-    CFG2["SPARSE_CANDIDATES_K = 20"] -.-> B3
-    CFG3["BM25_SCORE_MIN = 0.0"] -.-> B4
-    CFG4["RRF_K = 60.0"] -.-> C4
-    CFG5["HYBRID_TOPK_DEFAULT = 5"] -.-> C5
-    CFG6["RECOMMEND_MAX_PROBES = 3\nRECOMMEND_PROBE_CANDIDATES = 15"] -.-> E1
-    CFG7["MMR_LAMBDA = 0.5"] -.-> M1
-    CFG8["SIM_SAME_DISH = 0.9\nSIM_SAME_CATEGORY = 0.3\nSIM_DIFFERENT = 0.0"] -.-> M2
+    CFG1["DENSE_K=20"] -.-> A3
+    CFG2["SPARSE_K=20"] -.-> B3
+    CFG3["SCORE_MIN=0"] -.-> B4
+    CFG4["RRF_K=60"] -.-> C2
+    CFG5["TOPK=5"] -.-> C3
+    CFG6["PROBES=3 CAND=15"] -.-> E1
+    CFG7["λ=0.5"] -.-> M1
 
-    class CFG1,CFG2,CFG3,CFG4,CFG5,CFG6,CFG7,CFG8 config
-    class A1,A2,B1,B2 process
-    class A3,B3 branch
-    class C4,C5 result
-    class D1,D2,D3,D4 cache
+    class CFG1,CFG2,CFG3,CFG4,CFG5,CFG6,CFG7 config
+    class A1,A2,A3,A4,B1,B2,B3,B4 proc
+    class E4,E6 cond
+    class C2,C3,E9 out
 </pre>
 </div>
 
 <div class="cfg-ref">
-  <strong>关键配置（src/config.py）</strong><br>
-  <code>DENSE_CANDIDATES_K = 20</code> — FAISS 通道候选数 ·
-  <code>SPARSE_CANDIDATES_K = 20</code> — BM25 通道候选数 ·
-  <code>RRF_K = 60.0</code> — RRF 融合常数 ·
-  <code>BM25_SCORE_MIN = 0.0</code> — BM25 分数最低阈值<br>
-  <code>RECOMMEND_MAX_PROBES = 3</code> — 推荐场景最大探针数 ·
-  <code>RECOMMEND_PROBE_CANDIDATES = 15</code> — 每探针候选收集数 ·
-  <code>MMR_LAMBDA = 0.5</code> — 相关性/多样性权衡 ·
-  <code>HYBRID_TOPK_DEFAULT = 5</code> — 混合检索默认返回数
+  <strong>配置（src/config.py）</strong><br>
+  <code>DENSE_CANDIDATES_K = 20</code> ·
+  <code>SPARSE_CANDIDATES_K = 20</code> ·
+  <code>BM25_SCORE_MIN = 0.0</code> ·
+  <code>RRF_K = 60.0</code> ·
+  <code>HYBRID_TOPK_DEFAULT = 5</code><br>
+  <code>RECOMMEND_MAX_PROBES = 3</code> ·
+  <code>RECOMMEND_PROBE_CANDIDATES = 15</code> ·
+  <code>MMR_LAMBDA = 0.5</code> ·
+  <code>MMR 启发式: 同菜=0.9, 同类=0.3, 不同=0.0</code>
 </div>
 
 </div>
