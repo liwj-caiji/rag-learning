@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Rewriting — 查询改写与意图识别模块</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  body { background: #f8f9fa; font-family: 'Noto Sans SC', sans-serif; margin: 0; padding: 30px; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { color: #1a1a2e; text-align: center; font-size: 24px; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 30px; }
+  .mermaid-box { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); padding: 30px; margin-bottom: 24px; overflow-x: auto; }
+  .cfg-ref { background: #e8f4fd; border-radius: 8px; padding: 14px 18px; font-size: 13px; color: #333; }
+  .cfg-ref code { background: #d0e8f7; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  .cfg-ref strong { color: #1a73e8; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>查询改写与意图识别模块</h1>
+<p class="subtitle">Rule-based (离线) vs LLM (DeepSeek) 双模式</p>
+
+<div class="mermaid-box">
+<pre class="mermaid">
+flowchart TD
+    %% 样式
+    classDef config fill:#e8f4fd,stroke:#90caf9,stroke-dasharray:5,5,color:#1565c0
+    classDef process fill:#e8f5e9,stroke:#81c784,color:#2e7d32
+    classDef branch fill:#fff8e1,stroke:#ffd54f,color:#f57f17
+    classDef result fill:#fff3e0,stroke:#ffb74d,color:#e65100
+    classDef rule fill:#fce4ec,stroke:#ef9a9a,color:#c62828
+    classDef llm fill:#e8eaf6,stroke:#9fa8da,color:#283593
+
+    USER["用户查询"] --> LLM_SWITCH{"use_llm=True?"}
+
+    %% ========== LLM 路径 ==========
+    subgraph LLM_PATH["LLM 路径（LLMIntentClassifier）"]
+        direction TB
+
+        LLM0["LLMIntentClassifier(model=LLM_INTENT_MODEL,\napi_base=LLM_INTENT_API_BASE)"]
+        LLM0 --> LLM1{"API Key 存在\n且客户端初始化成功?"}
+        LLM1 -->|"是"| LLM2["发送 ChatCompletion 请求\nresponse_format=json_object"]
+        LLM1 -->|"否"| FALLBACK["回退到规则模式\nclassify_intent(query)"]
+
+        LLM2 --> LLM2a{"请求成功?"}
+        LLM2a -->|"是"| LLM3["解析 JSON\n· intent\n· rewritten_query\n· filters\n· target_dish\n· probes\n· confidence"]
+        LLM2a -->|"异常"| FALLBACK
+
+        LLM3 --> LLM4{"意图=recommendation\n且 LLM 未提供 probes?"}
+        LLM4 -->|"是"| LLM5["规则 _build_probes()\n补充探针"]
+        LLM4 -->|"否"| LLM6["直接使用 LLM 输出"]
+    end
+
+    %% ========== 规则路径 ==========
+    subgraph RULE_PATH["规则路径（QueryRewriter / classify_intent）"]
+        direction TB
+
+        R0["classify_intent(query)"]
+
+        R0 --> R1["最长关键词匹配\n_INTENT_RULES"]
+        R1 --> R2["确定意图类型\n· recommendation\n· howto\n· ingredient\n· factual"]
+
+        R2 --> R3["提取过滤条件"]
+        R3 --> R3a["_DIFFICULTY_PATTERNS\n→ '★' / '★★' / '★★★★'"]
+        R3a --> R3b["_CATEGORY_KEYWORDS\n→ vegetable_dish / meat_dish / ..."]
+        R3b --> R3c["_CALORIE_LOW/HIGH_PATTERNS\n→ 'low' / 'high'"]
+
+        R2 --> R4{"意图是 howto\n或 ingredient?"}
+        R4 -->|"是"| R5["_DISH_PATTERN 提取菜名\n去除「的做法」后缀"]
+        R4 -->|"否"| R6["target_dish = None"]
+
+        R2 --> R7["_build_rewritten_query()"]
+        R7 --> R7a{"意图?"}
+        R7a -->|"recommendation"| R7b["去除语气词\n（今天/吃什么/推荐...）"]
+        R7a -->|"howto"| R7c["'{dish_name} 操作 步骤'"]
+        R7a -->|"ingredient"| R7d["'{dish_name} 必备原料和工具'"]
+        R7a -->|"factual"| R7e["返回原查询"]
+
+        R2 --> R8{"意图是\nrecommendation?"}
+        R8 -->|"是"| R9["_build_probes() 生成 2-5 个探针"]
+        R9 --> R9a["基础探针: '家常菜 {base}'"]
+        R9a --> R9b["类别探针: '{category} {base}'"]
+        R9b --> R9c["难度探针: '简单快手 {base}'"]
+        R8 -->|"否"| R10["probes = []"]
+    end
+
+    LLM_SWITCH -->|"是"| LLM0
+    LLM_SWITCH -->|"否"| R0
+
+    LLM6 & LLM5 --> MERGE
+    FALLBACK --> R0
+    R5 & R6 & R7b & R7c & R7d & R7e & R9 & R10 --> MERGE["IntentResult 数据类\n· intent\n· rewritten\n· filters\n· target_dish\n· probes\n· confidence"]
+
+    MERGE --> OUTPUT_R["输出到 generation 模块"]
+
+    %% 配置引用
+    CFG1["LLM_INTENT_MODEL = deepseek-v4-flash"] -.-> LLM0
+    CFG2["LLM_INTENT_API_BASE = api.deepseek.com"] -.-> LLM0
+    CFG3["LLM_INTENT_TIMEOUT = 8s"] -.-> LLM2
+    CFG4["LLM_INTENT_TEMPERATURE = 0.1"] -.-> LLM2
+    CFG5["LLM_INTENT_MAX_TOKENS = 512"] -.-> LLM2
+    CFG6["LLM_API_KEY_ENV = DEEPSEEK_API_KEY"] -.-> LLM1
+
+    class CFG1,CFG2,CFG3,CFG4,CFG5,CFG6 config
+    class LLM0,LLM2,LLM3 process
+    class LLM1,LLM2a,LLM4,R1,R4,R7a,R8 branch
+    class R0,R3,R5,R7,R9 process
+    class MERGE,OUTPUT_R result
+</pre>
+</div>
+
+<div class="cfg-ref">
+  <strong>配置（src/config.py）</strong><br>
+  <code>LLM_INTENT_MODEL = "deepseek-v4-flash"</code> —
+  <code>LLM_INTENT_TIMEOUT = 8.0</code> —
+  <code>LLM_INTENT_TEMPERATURE = 0.1</code> —
+  <code>LLM_INTENT_MAX_TOKENS = 512</code>
+</div>
+
+<div class="cfg-ref" style="background:#fce4ec;">
+  <strong>回退安全网</strong><br>
+  LLMIntentClassifier 在任何异常（无 API Key、网络超时、JSON 解析失败）下自动降级到基于规则的 <code>classify_intent()</code>，保证系统始终可用。
+</div>
+
+</div>
+</body>
+</html>

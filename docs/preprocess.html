@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Preprocess — 数据预处理模块</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  body { background: #f8f9fa; font-family: 'Noto Sans SC', sans-serif; margin: 0; padding: 30px; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { color: #1a1a2e; text-align: center; font-size: 24px; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 30px; }
+  .mermaid-box { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); padding: 30px; margin-bottom: 24px; overflow-x: auto; }
+  .cfg-ref { background: #e8f4fd; border-radius: 8px; padding: 14px 18px; font-size: 13px; color: #333; }
+  .cfg-ref code { background: #d0e8f7; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  .cfg-ref strong { color: #1a73e8; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>数据预处理模块</h1>
+<p class="subtitle">Recipe Splitting → Chunking → Index Building</p>
+
+<div class="mermaid-box">
+<pre class="mermaid">
+flowchart TD
+    %% ==================== 样式定义 ====================
+    classDef config fill:#e8f4fd,stroke:#90caf9,stroke-dasharray:5,5,color:#1565c0
+    classDef process fill:#e8f5e9,stroke:#81c784,color:#2e7d32
+    classDef output fill:#fff3e0,stroke:#ffb74d,color:#e65100
+    classDef file fill:#f3e5f5,stroke:#ce93d8,color:#6a1b9a
+
+    subgraph COLLECT["数据收集"]
+        direction LR
+        A1["collect_all_recipes()"] --> A2["遍历 DISHES_DIR\n（跳过 SKIP_DIRS）"]
+        A2 --> A3["返回 *.md 文件路径列表\n（按名称排序）"]
+    end
+
+    subgraph SPLIT["RecipeSplitter 分块"]
+        direction TB
+        B0["RecipeSplitter(filepath)\n从父目录推断 category"]
+        B0 --> B1["读取 .md 文件\n去除 FOOTER_PATTERN"]
+        B1 --> B2["_group_by_headings(split_level=2)\n按标题层级分割章节"]
+        B2 --> B3{"标题级别?"}
+
+        B3 -->|"H1（一级标题）"| B4["_make_l1_chunk\nlevel='dish'"]
+        B4 --> B5["metadata:\n· dish_name\n· category\n· difficulty\n· calories"]
+
+        B3 -->|"H2（二级标题）"| B6["_make_l2_chunks"]
+
+        B6 --> B7{"章节标题=='操作'\n且 SPLIT_H3=True?"}
+        B7 -->|"是"| B8["_make_l3_chunks\n递归调用 _group_by_headings(split_level=3)"]
+        B7 -->|"否"| B9["单 L2 块\nlevel='section'"]
+
+        B8 --> B10{"找到 ### 子章节?"}
+        B10 -->|"是"| B11["L3 块\nlevel='subsection'"]
+        B10 -->|"否"| B12["回退为 L2 块"]
+    end
+
+    subgraph INDEX["索引构建 build_index()"]
+        C0["SentenceTransformer(EMBED_MODEL)\nshibing624/text2vec-base-chinese"] --> C1["编码文本为 768 维向量"]
+        C1 --> C2["L2 归一化\nfaiss.normalize_L2"]
+        C2 --> C3["faiss.IndexFlatIP\n（内积 = 余弦相似度）"]
+        C3 --> C4["写入 FAISS_INDEX_PATH\nfaiss.index"]
+
+        C5["jieba 分词\nchinese_tokenize"] --> C6["rank_bm25.BM25Okapi"]
+        C6 --> C7["写入 BM25_INDEX_PATH\nbm25_index.pkl"]
+
+        C8["可序列化 chunks\n{text, level, metadata}"] --> C9["写入 CHUNKS_PATH\nchunks.pkl"]
+    end
+
+    A3 --> B0
+    B5 --> C0
+    B9 --> C0
+    B11 --> C0
+    B12 --> C0
+
+    %% 配置引用
+    D1["config: DISHES_DIR"] -.-> A2
+    D2["config: SKIP_DIRS"] -.-> A2
+    D3["config: REMOVE_FOOTER"] -.-> B1
+    D4["config: SPLIT_H3"] -.-> B7
+    D5["config: EMBED_MODEL"] -.-> C0
+    D6["config: FAISS_INDEX_PATH\nCHUNKS_PATH\nBM25_INDEX_PATH"] -.-> C4
+    D6 -.-> C7
+    D6 -.-> C9
+
+    class D1,D2,D3,D4,D5,D6 config
+    class A1,A2,B0,B1,B2 process
+    class B5,B9,B11,B12 output
+    class C4,C7,C9 file
+</pre>
+</div>
+
+<div class="cfg-ref">
+  <strong>配置集中管理（src/config.py）</strong><br>
+  <code>DISHES_DIR</code> — 食谱源文件路径 ·
+  <code>SKIP_DIRS</code> — 跳过的目录 ·
+  <code>REMOVE_FOOTER</code> — 是否移除标准 PR 页脚 ·
+  <code>SPLIT_H3</code> — 是否将「操作」章节按 ### 进一步拆分 ·
+  <code>EMBED_MODEL</code> — 嵌入模型名称 ·
+  <code>EMBED_DIM</code> — 嵌入向量维度（768）
+</div>
+
+<div class="cfg-ref" style="background:#fce4ec;">
+  <strong>输出文件</strong><br>
+  <code>faiss.index</code> — FAISS 稠密检索索引 ·
+  <code>bm25_index.pkl</code> — BM25 稀疏检索索引 ·
+  <code>chunks.pkl</code> — 可序列化的分块元数据
+</div>
+
+</div>
+</body>
+</html>
