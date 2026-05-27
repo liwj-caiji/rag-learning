@@ -105,6 +105,7 @@
   deepseek-chat ·
   30 样本 ·
   指标: 回答相关性, 上下文精确度, 上下文召回率, 忠实度
+  · ground_truth 已与知识库实际食谱对齐
 </p>
 
 <div class="section">
@@ -112,24 +113,24 @@
   <div class="cards">
     
         <div class="score-card">
-          <div class="score-value" style="color:#f57f17">0.692</div>
+          <div class="score-value" style="color:#f57f17">0.712</div>
           <div class="score-label">回答相关性</div>
-          <div class="score-bar"><div style="display:inline-block;width:100px;height:12px;background:#e0e0e0;border-radius:6px;vertical-align:middle;margin-right:8px;"><div style="width:69%;height:100%;background:#f57f17;border-radius:6px;"></div></div></div>
+          <div class="score-bar"><div style="display:inline-block;width:100px;height:12px;background:#e0e0e0;border-radius:6px;vertical-align:middle;margin-right:8px;"><div style="width:71%;height:100%;background:#f57f17;border-radius:6px;"></div></div></div>
         </div>
         <div class="score-card">
-          <div class="score-value" style="color:#c62828">0.351</div>
+          <div class="score-value" style="color:#f57f17">0.442</div>
           <div class="score-label">上下文精确度</div>
-          <div class="score-bar"><div style="display:inline-block;width:100px;height:12px;background:#e0e0e0;border-radius:6px;vertical-align:middle;margin-right:8px;"><div style="width:35%;height:100%;background:#c62828;border-radius:6px;"></div></div></div>
+          <div class="score-bar"><div style="display:inline-block;width:100px;height:12px;background:#e0e0e0;border-radius:6px;vertical-align:middle;margin-right:8px;"><div style="width:44%;height:100%;background:#f57f17;border-radius:6px;"></div></div></div>
         </div>
         <div class="score-card">
-          <div class="score-value" style="color:#c62828">0.228</div>
+          <div class="score-value" style="color:#2e7d32">0.765</div>
           <div class="score-label">上下文召回率</div>
-          <div class="score-bar"><div style="display:inline-block;width:100px;height:12px;background:#e0e0e0;border-radius:6px;vertical-align:middle;margin-right:8px;"><div style="width:23%;height:100%;background:#c62828;border-radius:6px;"></div></div></div>
+          <div class="score-bar"><div style="display:inline-block;width:100px;height:12px;background:#e0e0e0;border-radius:6px;vertical-align:middle;margin-right:8px;"><div style="width:76%;height:100%;background:#2e7d32;border-radius:6px;"></div></div></div>
         </div>
         <div class="score-card">
-          <div class="score-value" style="color:#2e7d32">0.877</div>
+          <div class="score-value" style="color:#2e7d32">0.817</div>
           <div class="score-label">忠实度</div>
-          <div class="score-bar"><div style="display:inline-block;width:100px;height:12px;background:#e0e0e0;border-radius:6px;vertical-align:middle;margin-right:8px;"><div style="width:88%;height:100%;background:#2e7d32;border-radius:6px;"></div></div></div>
+          <div class="score-bar"><div style="display:inline-block;width:100px;height:12px;background:#e0e0e0;border-radius:6px;vertical-align:middle;margin-right:8px;"><div style="width:82%;height:100%;background:#2e7d32;border-radius:6px;"></div></div></div>
         </div>
   </div>
 </div>
@@ -139,7 +140,7 @@
           <h2>按意图分组</h2>
           <table class="intent-table">
             <thead><tr><th>意图</th><th>回答相关性</th><th>上下文精确度</th><th>上下文召回率</th><th>忠实度</th></tr></thead>
-            <tbody><tr><td class="intent-name">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.887</span></td><td><span style="color:#c62828;font-weight:600;">0.203</span></td><td class="na">—</td><td><span style="color:#2e7d32;font-weight:600;">0.832</span></td></tr><tr><td class="intent-name">做法查询</td><td><span style="color:#f57f17;font-weight:600;">0.633</span></td><td><span style="color:#c62828;font-weight:600;">0.500</span></td><td><span style="color:#c62828;font-weight:600;">0.150</span></td><td><span style="color:#2e7d32;font-weight:600;">0.943</span></td></tr><tr><td class="intent-name">原料查询</td><td><span style="color:#f57f17;font-weight:600;">0.794</span></td><td><span style="color:#c62828;font-weight:600;">0.500</span></td><td><span style="color:#c62828;font-weight:600;">0.438</span></td><td><span style="color:#2e7d32;font-weight:600;">0.874</span></td></tr><tr><td class="intent-name">事实查询</td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">0.819</span></td></tr></tbody>
+            <tbody><tr><td class="intent-name">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.844</span></td><td><span style="color:#c62828;font-weight:600;">0.100</span></td><td class="na">—</td><td><span style="color:#f57f17;font-weight:600;">0.783</span></td></tr><tr><td class="intent-name">做法查询</td><td><span style="color:#f57f17;font-weight:600;">0.736</span></td><td><span style="color:#2e7d32;font-weight:600;">0.700</span></td><td><span style="color:#2e7d32;font-weight:600;">0.875</span></td><td><span style="color:#2e7d32;font-weight:600;">0.973</span></td></tr><tr><td class="intent-name">原料查询</td><td><span style="color:#f57f17;font-weight:600;">0.796</span></td><td><span style="color:#2e7d32;font-weight:600;">0.750</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td><td><span style="color:#f57f17;font-weight:600;">0.710</span></td></tr><tr><td class="intent-name">事实查询</td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#f57f17;font-weight:600;">0.659</span></td></tr></tbody>
           </table>
         </div>
 

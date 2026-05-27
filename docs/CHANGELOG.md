@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-05-27 — RAGAS 评估：ground truth 对齐 & 中文适配完成
+
+### 数据修复
+
+#### 评估数据集 ground truth 重写
+- **文件**: `data/evaluation/test_queries.yaml`
+- 所有 ground truth 与 `base/HowToCook` 中的实际食谱文件对齐（如麻婆豆腐使用咸鸭蛋版、水煮鱼使用巴沙鱼版等）
+- 知识库不存在的菜品（番茄炒蛋、饺子）移除 ground truth，context_recall 正确跳过
+- **效果**：context_recall 0.250→0.765（+206%），context_precision 0.267→0.442（+66%），howto 做法查询 context_recall 0.200→0.875
+
+### 文档更新
+
+#### `docs/evaluation.html`
+- 整体指标卡片更新为最新评分
+- 按意图分组表格更新
+- 副标题补充 ground truth 对齐说明
+
+### 涉及文件
+
+| 文件 | 改动类型 |
+|------|----------|
+| `data/evaluation/test_queries.yaml` | 修改（ground truth 重写） |
+| `docs/evaluation.html` | 修改（分数更新） |
+| `docs/CHANGELOG.md` | 修改（新增本条） |
+
 ## 2026-05-27 — RAGAS 中文评估优化 & 评估模块上线
 
 ### 功能新增
