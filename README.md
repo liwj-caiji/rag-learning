@@ -17,6 +17,7 @@
 | **MMR 重排序** | Maximum Marginal Relevance 平衡相关性与多样性 |
 | **元数据过滤** | 按难度、类别、卡路里等条件过滤结果 |
 | **LLM 生成** | 模板渲染 + LLM（deepseek-v4-flash）双模式答案生成 |
+| **RAGAS 评估** | 5 项指标评估（回答相关性、上下文精确度/召回率、忠实度、正确性） |
 | **Web UI** | Gradio 交互界面，支持 Pipeline 可视化与对话 |
 
 ---
@@ -110,6 +111,32 @@ export DEEPSEEK_API_KEY=your-api-key
 | **📦 数据概览** | 数据集统计（食谱数、品类分布、分块数） |
 | **💬 对话助手** | 侧栏对话窗口，支持连续提问 |
 
+### RAGAS 评估
+
+运行 RAGAS 评估流水线，用 5 项标准指标衡量检索和生成质量：
+
+```bash
+# 完整评估（30 样本，LLM 模式）
+uv run python scripts/evaluate.py --mode llm --limit 30
+
+# 仅评估指定意图
+uv run python scripts/evaluate.py --mode llm --intent howto
+
+# 输出 JSON 报告
+uv run python scripts/evaluate.py --mode llm --output report.json
+```
+
+评估指标说明：
+
+| 指标 | 含义 | 当前值 |
+|------|------|:---:|
+| **answer_relevancy** | 回答与问题的相关程度 | 0.712 |
+| **context_precision** | 检索到的上下文中有多少与问题相关 | 0.442 |
+| **context_recall** | 回答中可归因于上下文的比例 | 0.765 |
+| **faithfulness** | 回答是否忠于检索到的上下文（无幻觉） | 0.817 |
+
+> 评估使用 `ragas adapt_prompts(language="chinese")` 自动将指标提示词翻译为中文，首次运行缓存至 `.ragas_cache/`。
+
 ### Python API
 
 ```python
@@ -174,14 +201,30 @@ rag-learning/
 │       ├── dessert/             #     甜点
 │       └── drink/               #     饮品
 │
-├── data/vectorstore/            # 索引数据（构建后生成）
-│   ├── faiss.index              #   FAISS 稠密向量索引
-│   ├── chunks.pkl               #   分块元数据
-│   └── bm25_index.pkl           #   BM25 稀疏索引
+├── data/
+│   ├── vectorstore/               # 索引数据（构建后生成）
+│   │   ├── faiss.index            #   FAISS 稠密向量索引
+│   │   ├── chunks.pkl             #   分块元数据
+│   │   └── bm25_index.pkl         #   BM25 稀疏索引
+│   └── evaluation/
+│       └── test_queries.yaml      # 评估数据集（30 条中文查询 + ground_truth）
+│
+├── scripts/
+│   ├── evaluate.py                # RAGAS 评估入口
+│   └── generate_report.py         # HTML 评估报告生成
+│
+├── tests/                         # 单元测试
+│   ├── test_pipeline.py
+│   ├── test_evaluation.py
+│   └── ...
 │
 ├── docs/
-│   ├── 功能实现说明_v1.0.md      # v1.0 功能文档
-│   └── 功能实现说明_v1.1.md      # v1.1 LLM 集成增量文档
+│   ├── CHANGELOG.md               # 变更日志
+│   ├── evaluation.html            # RAGAS 评估报告
+│   ├── retrieval.html             # 检索模块架构图
+│   ├── rewriting.html             # 改写模块架构图
+│   ├── generation.html            # 生成模块架构图
+│   └── preprocess.html            # 预处理模块架构图
 │
 └── src/
     ├── preprocess/              # 数据预处理
@@ -199,11 +242,17 @@ rag-learning/
     │   ├── rewriter.py          #   改写器抽象
     │   └── llm_intent.py        #   LLM 意图分类器
     │
-    └── generation/              # 答案生成
-        ├── base.py              #   Generator 抽象基类
-        ├── template.py          #   模板生成器
-        ├── llm_generator.py     #   LLM 生成器
-        └── pipeline.py          #   RAGPipeline 端到端编排
+    ├── generation/              # 答案生成
+    │   ├── base.py              #   Generator 抽象基类
+    │   ├── template.py          #   模板生成器
+    │   ├── llm_generator.py     #   LLM 生成器
+    │   └── pipeline.py          #   RAGPipeline 端到端编排
+    │
+    └── evaluation/              # RAGAS 评估
+        ├── evaluator.py         #   RAGASEvaluator 核心评估器
+        ├── dataset.py           #   评估数据集加载与过滤
+        ├── reporter.py          #   HTML / JSON 报告生成
+        └── config.py            #   评估配置（LLM、指标、批处理）
 ```
 
 ---
@@ -279,5 +328,6 @@ rag-learning/
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v1.2 | 2026-05-27 | RAGAS 评估模块 + 中文提示词适配（adapt_prompts） + 评估数据集 ground truth 对齐 |
 | v1.1 | 2026-05-25 | LLM 集成 + Gradio Web UI |
 | v1.0 | 2026-05-25 | 基础 RAG 流水线（预处理、检索、改写、生成） |
