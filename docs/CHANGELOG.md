@@ -1,5 +1,48 @@
 # Changelog
 
+## 2026-05-27 — RAGAS 中文评估优化 & 评估模块上线
+
+### 功能新增
+
+#### 1. RAGAS 评估模块
+- **新增 `src/evaluation/`**：完整的 RAGAS 评估流水线
+  - `evaluator.py`：核心评估器，封装 RAGAS metrics 计算
+  - `dataset.py`：从 YAML 加载测试查询，构建评估数据集
+  - `reporter.py`：生成 HTML 评估报告
+  - `config.py`：评估专用配置（LLM、指标、批处理）
+- **新增 `data/evaluation/test_queries.yaml`**：30 条中文烹饪领域测试查询，覆盖做法查询、原料查询、推荐、事实查询四类意图
+- **新增 `scripts/evaluate.py`**：一键运行评估并生成报告
+- **新增 `scripts/generate_report.py`**：独立 HTML 报告生成
+
+#### 2. RAGAS 中文提示词适配（adapt_prompts）
+- **文件**: `src/evaluation/evaluator.py`
+- 使用 ragas 官方 `adapt_prompts(language="chinese")` API 自动翻译所有指标的提示词为中文
+- 首次运行通过 deepseek-chat 翻译并 pickle 缓存至 `.ragas_cache/`，后续运行零 API 调用
+- 替换了早期手写 PydanticPrompt 方案（`prompts.py`，已删除），消除 398 行需与 ragas 内部 schema 精确对齐的维护负担
+
+#### 3. Pipeline trace 增强
+- **文件**: `src/generation/pipeline.py`
+- `trace()` 方法返回的 chunk 中新增 `text` 字段，供评估模块提取上下文文本
+
+### 涉及文件
+
+| 文件 | 改动类型 |
+|------|----------|
+| `src/evaluation/__init__.py` | 新增 |
+| `src/evaluation/evaluator.py` | 新增 |
+| `src/evaluation/dataset.py` | 新增 |
+| `src/evaluation/reporter.py` | 新增 |
+| `src/evaluation/config.py` | 新增 |
+| `src/evaluation/prompts.py` | 已删除（被 adapt_prompts 替代） |
+| `data/evaluation/test_queries.yaml` | 新增 |
+| `docs/evaluation.html` | 新增（评估报告） |
+| `scripts/evaluate.py` | 新增 |
+| `scripts/generate_report.py` | 新增 |
+| `src/generation/pipeline.py` | 修改（trace 增加 text 字段） |
+| `requirements.txt` | 修改（新增 ragas, datasets, pyyaml 等依赖） |
+| `.gitignore` | 修改（新增 .ragas_cache/） |
+| `docs/CHANGELOG.md` | 修改（新增本条） |
+
 ## 2026-05-26 — Mermaid 示意图布局优化 & 功能增强
 
 ### 功能增强

@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evaluation — RAGAS 评估报告</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    background: #f8f9fa;
+    font-family: 'Noto Sans SC', 'Segoe UI', system-ui, sans-serif;
+    margin: 0; padding: 20px;
+    color: #333;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 { color: #1a1a2e; text-align: center; font-size: 24px; margin: 0 0 4px 0; }
+  .subtitle { text-align: center; color: #666; font-size: 13px; margin: 0 0 24px 0; }
+
+  /* Summary cards */
+  .cards {
+    display: flex; flex-wrap: wrap; gap: 16px; justify-content: center;
+    margin-bottom: 24px;
+  }
+  .score-card {
+    background: #fff; border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.07);
+    padding: 16px 20px; min-width: 160px; text-align: center;
+  }
+  .score-value { font-size: 32px; font-weight: 700; margin-bottom: 2px; }
+  .score-label { font-size: 12px; color: #888; margin-bottom: 8px; }
+  .score-bar { display: flex; justify-content: center; }
+
+  /* Sections */
+  .section {
+    background: #fff; border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.07);
+    padding: 20px 24px; margin-bottom: 18px;
+  }
+  .section h2 {
+    font-size: 16px; color: #1a1a2e; margin: 0 0 12px 0;
+    padding-bottom: 8px; border-bottom: 2px solid #e8f4fd;
+  }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: #e8f4fd; color: #1565c0; font-weight: 600;
+    padding: 8px 10px; text-align: left; white-space: nowrap;
+    position: sticky; top: 0;
+  }
+  tbody td {
+    padding: 7px 10px; border-bottom: 1px solid #f0f0f0;
+  }
+  tr:hover td { background: #fafafa; }
+  .intent-table { max-width: 800px; }
+  .intent-name { font-weight: 600; }
+  .qcol { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .idx { color: #999; font-size: 11px; text-align: center; width: 30px; }
+  .intent { color: #666; font-size: 12px; }
+  .na { color: #bbb; }
+
+  /* Answer details */
+  .answer-detail {
+    margin: 4px 0; padding: 6px 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .answer-detail summary {
+    cursor: pointer; font-size: 13px; color: #333;
+    padding: 4px 0;
+  }
+  .answer-detail summary:hover { color: #1565c0; }
+  .answer-text {
+    background: #fafafa; border-radius: 6px; padding: 12px 16px;
+    margin: 8px 0; font-size: 13px; line-height: 1.7;
+    white-space: pre-wrap; word-break: break-word;
+  }
+
+  /* Meta footer */
+  .meta {
+    background: #e8f4fd; border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; color: #333; line-height: 1.7;
+    margin-top: 8px;
+  }
+  .meta code { background: #d0e8f7; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .meta strong { color: #1a73e8; }
+
+  /* Mermaid box */
+  .mermaid-box {
+    background: #fff; border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.07);
+    padding: 20px; margin-bottom: 18px; overflow-x: auto;
+  }
+
+  @media (max-width: 768px) {
+    .cards { flex-direction: column; align-items: center; }
+    .score-card { min-width: 140px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>RAGAS 评估报告</h1>
+<p class="subtitle">
+  deepseek-chat ·
+  30 样本 ·
+  指标: 回答相关性, 上下文精确度, 上下文召回率, 忠实度
+</p>
+
+<div class="section">
+  <h2>整体指标</h2>
+  <div class="cards">
+    
+        <div class="score-card">
+          <div class="score-value" style="color:#f57f17">0.692</div>
+          <div class="score-label">回答相关性</div>
+          <div class="score-bar"><div style="display:inline-block;width:100px;height:12px;background:#e0e0e0;border-radius:6px;vertical-align:middle;margin-right:8px;"><div style="width:69%;height:100%;background:#f57f17;border-radius:6px;"></div></div></div>
+        </div>
+        <div class="score-card">
+          <div class="score-value" style="color:#c62828">0.351</div>
+          <div class="score-label">上下文精确度</div>
+          <div class="score-bar"><div style="display:inline-block;width:100px;height:12px;background:#e0e0e0;border-radius:6px;vertical-align:middle;margin-right:8px;"><div style="width:35%;height:100%;background:#c62828;border-radius:6px;"></div></div></div>
+        </div>
+        <div class="score-card">
+          <div class="score-value" style="color:#c62828">0.228</div>
+          <div class="score-label">上下文召回率</div>
+          <div class="score-bar"><div style="display:inline-block;width:100px;height:12px;background:#e0e0e0;border-radius:6px;vertical-align:middle;margin-right:8px;"><div style="width:23%;height:100%;background:#c62828;border-radius:6px;"></div></div></div>
+        </div>
+        <div class="score-card">
+          <div class="score-value" style="color:#2e7d32">0.877</div>
+          <div class="score-label">忠实度</div>
+          <div class="score-bar"><div style="display:inline-block;width:100px;height:12px;background:#e0e0e0;border-radius:6px;vertical-align:middle;margin-right:8px;"><div style="width:88%;height:100%;background:#2e7d32;border-radius:6px;"></div></div></div>
+        </div>
+  </div>
+</div>
+
+
+        <div class="section">
+          <h2>按意图分组</h2>
+          <table class="intent-table">
+            <thead><tr><th>意图</th><th>回答相关性</th><th>上下文精确度</th><th>上下文召回率</th><th>忠实度</th></tr></thead>
+            <tbody><tr><td class="intent-name">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.887</span></td><td><span style="color:#c62828;font-weight:600;">0.203</span></td><td class="na">—</td><td><span style="color:#2e7d32;font-weight:600;">0.832</span></td></tr><tr><td class="intent-name">做法查询</td><td><span style="color:#f57f17;font-weight:600;">0.633</span></td><td><span style="color:#c62828;font-weight:600;">0.500</span></td><td><span style="color:#c62828;font-weight:600;">0.150</span></td><td><span style="color:#2e7d32;font-weight:600;">0.943</span></td></tr><tr><td class="intent-name">原料查询</td><td><span style="color:#f57f17;font-weight:600;">0.794</span></td><td><span style="color:#c62828;font-weight:600;">0.500</span></td><td><span style="color:#c62828;font-weight:600;">0.438</span></td><td><span style="color:#2e7d32;font-weight:600;">0.874</span></td></tr><tr><td class="intent-name">事实查询</td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">0.819</span></td></tr></tbody>
+          </table>
+        </div>
+
+<div class="section">
+  <h2>逐样本评分</h2>
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr><th>#</th><th>查询</th><th>意图</th><th>回答相关性</th><th>上下文精确度</th><th>上下文召回率</th><th>忠实度</th></tr></thead>
+    <tbody><tr><td class="idx">1</td><td class="qcol">麻婆豆腐怎么做</td><td class="intent">做法查询</td><td><span style="color:#2e7d32;font-weight:600;">0.944</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td></tr><tr><td class="idx">2</td><td class="qcol">红烧肉的做法</td><td class="intent">做法查询</td><td><span style="color:#f57f17;font-weight:600;">0.768</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td></tr><tr><td class="idx">3</td><td class="qcol">番茄炒蛋怎么做</td><td class="intent">做法查询</td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">0.833</span></td></tr><tr><td class="idx">4</td><td class="qcol">清蒸鲈鱼怎么做好吃</td><td class="intent">做法查询</td><td><span style="color:#2e7d32;font-weight:600;">0.941</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td><td><span style="color:#2e7d32;font-weight:600;">0.847</span></td></tr><tr><td class="idx">5</td><td class="qcol">宫保鸡丁的做法</td><td class="intent">做法查询</td><td><span style="color:#2e7d32;font-weight:600;">0.932</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">0.971</span></td></tr><tr><td class="idx">6</td><td class="qcol">紫菜蛋花汤怎么做</td><td class="intent">做法查询</td><td><span style="color:#c62828;font-weight:600;">0.288</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td></tr><tr><td class="idx">7</td><td class="qcol">可乐鸡翅的做法</td><td class="intent">做法查询</td><td><span style="color:#2e7d32;font-weight:600;">0.926</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td><td><span style="color:#c62828;font-weight:600;">0.500</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td></tr><tr><td class="idx">8</td><td class="qcol">水煮鱼怎么做</td><td class="intent">做法查询</td><td><span style="color:#c62828;font-weight:600;">0.587</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">0.918</span></td></tr><tr><td class="idx">9</td><td class="qcol">饺子怎么包</td><td class="intent">做法查询</td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">0.857</span></td></tr><tr><td class="idx">10</td><td class="qcol">蒜蓉西兰花的做法</td><td class="intent">做法查询</td><td><span style="color:#2e7d32;font-weight:600;">0.941</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td></tr><tr><td class="idx">11</td><td class="qcol">可乐鸡翅需要什么材料</td><td class="intent">原料查询</td><td><span style="color:#2e7d32;font-weight:600;">0.938</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td></tr><tr><td class="idx">12</td><td class="qcol">麻婆豆腐的配料</td><td class="intent">原料查询</td><td><span style="color:#2e7d32;font-weight:600;">0.941</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td></tr><tr><td class="idx">13</td><td class="qcol">红烧肉需要哪些调料</td><td class="intent">原料查询</td><td><span style="color:#2e7d32;font-weight:600;">0.986</span></td><td><span style="color:#c62828;font-weight:600;">0.500</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">0.933</span></td></tr><tr><td class="idx">14</td><td class="qcol">番茄炒蛋的材料清单</td><td class="intent">原料查询</td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#f57f17;font-weight:600;">0.667</span></td><td><span style="color:#c62828;font-weight:600;">0.333</span></td></tr><tr><td class="idx">15</td><td class="qcol">宫保鸡丁用什么材料</td><td class="intent">原料查询</td><td><span style="color:#2e7d32;font-weight:600;">0.922</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">0.897</span></td></tr><tr><td class="idx">16</td><td class="qcol">水煮鱼需要准备什么</td><td class="intent">原料查询</td><td><span style="color:#2e7d32;font-weight:600;">0.876</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.400</span></td><td><span style="color:#2e7d32;font-weight:600;">0.952</span></td></tr><tr><td class="idx">17</td><td class="qcol">今天吃什么</td><td class="intent">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.969</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td class="na">—</td><td><span style="color:#2e7d32;font-weight:600;">0.820</span></td></tr><tr><td class="idx">18</td><td class="qcol">推荐几道好吃的荤菜</td><td class="intent">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.889</span></td><td><span style="color:#c62828;font-weight:600;">0.333</span></td><td class="na">—</td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td></tr><tr><td class="idx">19</td><td class="qcol">有什么简单的家常菜推荐</td><td class="intent">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.899</span></td><td><span style="color:#c62828;font-weight:600;">0.250</span></td><td class="na">—</td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td></tr><tr><td class="idx">20</td><td class="qcol">低热量的素菜有什么</td><td class="intent">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.900</span></td><td><span style="color:#f57f17;font-weight:600;">0.700</span></td><td class="na">—</td><td><span style="color:#f57f17;font-weight:600;">0.789</span></td></tr><tr><td class="idx">21</td><td class="qcol">适合新手的菜有哪些</td><td class="intent">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.881</span></td><td><span style="color:#c62828;font-weight:600;">0.250</span></td><td class="na">—</td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td></tr><tr><td class="idx">22</td><td class="qcol">能不能推荐几道汤</td><td class="intent">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.874</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td class="na">—</td><td><span style="color:#2e7d32;font-weight:600;">0.833</span></td></tr><tr><td class="idx">23</td><td class="qcol">有什么好吃的早餐推荐</td><td class="intent">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.829</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td class="na">—</td><td><span style="color:#f57f17;font-weight:600;">0.692</span></td></tr><tr><td class="idx">24</td><td class="qcol">高大上的宴客菜有哪些</td><td class="intent">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.904</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td class="na">—</td><td><span style="color:#c62828;font-weight:600;">0.444</span></td></tr><tr><td class="idx">25</td><td class="qcol">哪些菜热量低</td><td class="intent">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.820</span></td><td><span style="color:#c62828;font-weight:600;">0.500</span></td><td class="na">—</td><td><span style="color:#2e7d32;font-weight:600;">0.913</span></td></tr><tr><td class="idx">26</td><td class="qcol">老抽和生抽有什么区别</td><td class="intent">事实查询</td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#f57f17;font-weight:600;">0.600</span></td></tr><tr><td class="idx">27</td><td class="qcol">做红烧肉用什么部位的肉</td><td class="intent">原料查询</td><td><span style="color:#2e7d32;font-weight:600;">0.896</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td></tr><tr><td class="idx">28</td><td class="qcol">豆瓣酱是什么</td><td class="intent">事实查询</td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">0.857</span></td></tr><tr><td class="idx">29</td><td class="qcol">鱼香肉丝里为什么没有鱼</td><td class="intent">事实查询</td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td><span style="color:#2e7d32;font-weight:600;">1.000</span></td></tr><tr><td class="idx">30</td><td class="qcol">高蛋白低脂肪的菜有哪些</td><td class="intent">推荐</td><td><span style="color:#2e7d32;font-weight:600;">0.908</span></td><td><span style="color:#c62828;font-weight:600;">0.000</span></td><td class="na">—</td><td><span style="color:#2e7d32;font-weight:600;">0.824</span></td></tr></tbody>
+  </table>
+  </div>
+</div>
+
+<div class="section">
+  <h2>回答详情</h2>
+  
+        <details class="answer-detail">
+          <summary><strong>#1</strong> 麻婆豆腐怎么做</summary>
+          <div class="answer-text">根据检索到的食谱信息，这里为您整理出麻婆豆腐的做法（以咸鸭蛋替代传统豆瓣酱的版本）：
+
+---
+
+### 麻婆豆腐的做法
+
+**预估烹饪难度：** ★★★  
+**预估卡路里：** 476 大卡  
+**全程时长：** 约 40 分钟
+
+#### 必备原料与工具
+- 内脂豆腐（推荐清美）
+- 水果刀
+- 咸鸭蛋（推荐留夫鸭）
+- 五花肉（或超市的肉糜）
+- 大蒜、生姜、小米椒（不吃辣可省略）
+- 香辣酱（推荐广乐）
+- 花椒、食盐、酱油（味极鲜）
+
+#### 用料计算（一份）
+| 原料 | 用量 |
+|------|------|
+| 内脂豆腐 | 1 盒 |
+| 咸鸭蛋 | 1 枚 |
+| 五花肉 | 20-30g |
+| 大蒜 | 2 瓣 |
+| 生姜 | 2 片 |
+| 小米辣 | 5 根 |
+| 蒜蓉辣酱 | 5g |
+| 花椒 | 20 颗 |
+| 食盐 | 3g |
+| 酱油（味极鲜） | 10g |
+
+#### 操作步骤
+1. **预处理食材**：大蒜、生姜切碎；小米辣切圈；五花肉剁成肉糜（若直接使用肉糜则跳过）。
+2. **腌制肉糜**：肉糜中加入一半的食盐和味极鲜酱油</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#2</strong> 红烧肉的做法</summary>
+          <div class="answer-text">根据检索到的食谱信息，这里为您介绍一道**徽派红烧肉**的做法。这是一道色泽红亮、肥而不腻、软糯 Q 弹、咸甜交融的经典家常菜，预估制作时长约 45 分钟。
+
+---
+
+### 必备原料和工具
+
+- 五花肉  
+- 白砂糖  
+- 食用油  
+- 生抽、老抽、蚝油  
+- 姜片、蒜头、葱、料酒  
+- 五香粉、盐
+
+### 每份用量（约 300g 五花肉）
+
+| 原料       | 用量            |
+|------------|----------------|
+| 五花肉     | 300 g          |
+| 白砂糖     | 100 g          |
+| 食用油     | 200 g（分两次） |
+| 生抽       | 10 ml          |
+| 老抽       | 5 ml           |
+| 蚝油       | 5 ml           |
+| 姜片       | 2 片           |
+| 蒜头       | 3 颗           |
+| 料酒       | 100 ml        </div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#3</strong> 番茄炒蛋怎么做</summary>
+          <div class="answer-text">抱歉，根据检索到的食谱信息，我没有找到「番茄炒蛋」的具体做法。不过，我找到了其他与番茄和鸡蛋相关的菜品，可以作为参考：
+
+- **番茄牛肉蛋花汤**（来自[1]）：一道酸甜开胃的汤品，使用牛肉、番茄、鸡蛋等食材，做法简单，约半小时完成。
+- **意式香肠北非蛋**（来自[3]）：地中海风味料理，番茄肉酱搭配溏心蛋，口感浓郁。
+- **美式炒蛋**（来自[5]）：松软的蛋料理，加入牛奶制作，但未使用番茄。
+
+如果您需要其中某道菜的具体步骤，我可以为您整理。或者，您可以尝试搜索更完整的“番茄炒蛋”食谱信息。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#4</strong> 清蒸鲈鱼怎么做好吃</summary>
+          <div class="answer-text">根据检索到的食谱信息，以下是清蒸鲈鱼的详细做法，按照步骤整理，确保鱼肉鲜嫩美味。
+
+---
+
+### 🐟 清蒸鲈鱼做法（经典粤式）
+
+**特点**：鱼肉细嫩爽滑，清淡鲜美，保留原汁原味，操作简单，约30分钟完成。
+
+**预估难度**：★★★  
+**预估热量**：385 大卡
+
+---
+
+#### ✅ 必备原料（每份）
+
+| 原料 | 用量 |
+|------|------|
+| 鲈鱼 | 1 条（建议让店家杀好） |
+| 香葱 | 3 根 |
+| 姜 | 1 块 |
+| 食用油 | 10-15 ml |
+| 蒸鱼豉油 | 10-15 ml |
+| 料酒 | 10-15 ml |
+| 食用盐 | 5-10 g |
+
+---
+
+#### 🔪 操作步骤
+
+1. **准备辅料**：姜切片和丝，葱白切段，葱绿切丝。葱丝切好后放入冷水中浸泡备用（可使其卷曲美观）。
+
+2. **处理鲈鱼**：鱼洗净后用厨房纸擦干，两面各划几刀。用盐搓洗掉鱼身粘液，再用约10g盐抹遍鱼身内外，**腌制10分钟以上**。
+
+3. **改刀摆盘**（关键技巧）：将鱼肚剖开，使鱼能立起来蒸（均匀受热，不用翻面）。具体如图</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#5</strong> 宫保鸡丁的做法</summary>
+          <div class="answer-text"># 宫保鸡丁的做法
+
+根据检索到的食谱信息，这道川味名菜以糊辣荔枝味见长，小酸甜中透着干辣椒与花椒的香气，鸡丁嫩滑、花生酥脆，口感层次丰富。做法分成**简易版本**和**进阶版本**，对新手比较友好，从备料到出锅大约需要 1.5 小时。
+
+---
+
+## 必备原料和工具
+
+- 手枪腿（或鸡胸脯肉）
+- 大葱
+- 干辣椒（或二荆条）
+- 熟花生
+- 生抽酱油、香醋、白糖、料酒、盐、鸡精、淀粉、植物油、芝麻油
+
+**可选原料**：油泼辣子、莴笋、生花生、豆瓣酱
+
+---
+
+## 简易版本操作步骤
+
+1. **处理鸡肉**：手枪腿去骨，鸡肉面用刀背拍打，切成约1.5cm见方肉丁；泡清水10分钟，捞出控干。  
+2. **准备配料**：取大葱葱绿与姜片5g，倒入50g开水制成葱姜水；葱白切1.5cm圆粒；花生放入微波炉高火5分钟焙干。  
+3. **腌制鸡丁**：鸡丁加盐2g、老抽酱油5g、料酒15g、淀粉15g搅拌均匀；缓慢加入部分葱姜水，搅拌至粘手；密封放入冰箱腌制1小时。  
+4. **处理干辣椒和花椒**：干辣椒切段；起锅小火，干辣椒焙干至微微发糊，捞起；花椒焙干出香，捞起。  
+5.</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#6</strong> 紫菜蛋花汤怎么做</summary>
+          <div class="answer-text"># 紫菜蛋花汤的做法
+
+紫菜蛋花汤是一道清淡鲜美的家常汤品，做法简单，从准备到出锅约需 **20 分钟**。以下是基于完整食谱的详细步骤：
+
+## 必备原料和工具
+
+| 食材/工具 | 用量（1人份） | 备注 |
+|-----------|--------------|------|
+| 干紫菜 | 10 克 | 喜欢可多放 |
+| 鸡蛋 | 2 个 | |
+| 盐 | 2 克 | |
+| 油 | 5 毫升 | |
+| 水 | 1.5 升 | |
+| 葱花 | 适量 | 装饰用 |
+| 香油 | 几滴 | 出锅前加入 |
+| 虾皮/虾仁 | 可选 | 提鲜 |
+
+## 操作步骤
+
+1. **泡紫菜**：干紫菜用清水泡 **15 分钟**，捞起沥干水分备用。
+2. **煮水**：热锅，倒入 1.5 升清水、5 毫升油、2 克盐。待水烧开。
+3. **放紫菜**：水开后放入泡好的紫菜，继续烧 **3 分钟**。
+4. **淋蛋液**：将打好的蛋液 **徐徐倒入** 锅内，倒入后约 **30 秒** 即可关火。
+   - 小技巧：为了让蛋花更嫩，可将火关小，蛋液围绕中间沸腾的水倒入，然后盖</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#7</strong> 可乐鸡翅的做法</summary>
+          <div class="answer-text"># 可乐鸡翅的做法
+
+根据提供的食谱，可乐鸡翅是一道色泽红亮、口感嫩滑、咸甜适口的家常菜。下面是详细做法：
+
+## 准备材料（1盘份量）
+- 鸡翅中：10~12只
+- 可乐：500ml
+- 白糖：10克
+- 生抽：15克
+- 老抽：3克（可选，用于上色）
+- 盐：2克
+- 生姜：2片
+- 料酒：20毫升
+- 小葱：1根（挽成结）
+
+## 操作步骤
+
+1. **焯水**：鸡翅入锅，倒入冷水淹没，放入生姜1片和料酒10~20毫升。大火煮开（约2分钟），撇去浮沫，捞出沥干水分。  
+   *提示：如果是刚买来的新鲜鸡翅，可直接改刀用生抽腌制，无需焯水。*
+
+2. **改刀腌制**：捞出鸡翅后，用刀在鸡翅两面各划两刀。加入约10克生抽，腌制10分钟（生抽能完全包裹鸡翅表面即可）。
+
+3. **煎制**：锅重新小火起油，先将剩余的姜片爆香，然后下入腌好的鸡翅。将鸡翅煎至两面金黄，用炒勺翻动4~5下，防止姜片和鸡翅粘黏。
+
+4. **加可乐煮**：鸡翅金黄后，倒入可乐没过鸡翅。开大火煮沸，撇去漂浮的黑色浮沫（含血水），此时加入葱结。
+
+5. **调味**：加入盐2克、白糖10克、生抽3克（可加老抽</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#8</strong> 水煮鱼怎么做</summary>
+          <div class="answer-text"># 水煮鱼的做法
+
+水煮鱼是一道麻辣鲜香、鱼肉嫩滑的经典川菜。以下是根据食谱整理的详细做法，预计制作时长约**2小时**，难度适中。
+
+---
+
+## 🛒 必备原料和工具
+
+| 原料/工具 | 用量（3-5人份） |
+|-----------|----------------|
+| 巴沙鱼 | 500g |
+| 蔬菜（推荐土豆片/豆芽/花菜/生菜等） | 300~500g |
+| 红油豆瓣酱 | 40g（可根据辣度喜好调整10~20g） |
+| 豆豉（可选） | 10g |
+| 藤椒油 | 10ml |
+| 菜籽油 | 25ml |
+| 白胡椒粉 | 3g |
+| 大蒜 | 2瓣 |
+| 盐 | 5g |
+| 糖 | 2g |
+
+工具：量杯、厨房秤（可选）、大不锈钢碗
+
+---
+
+## 📋 操作步骤
+
+### 1. 准备鱼片
+- 巴沙鱼若冷冻，需**室温自然解冻约5小时**。
+- 将鱼切成**约5cm长、3cm宽的薄片**（可先切成5cm鱼块，再斜着撇成薄片）。
+
+### 2. 腌制鱼片（至少30分钟）
+- 将鱼片放入大不锈钢碗中。
+- 加入**30g豆瓣酱、3g盐、10ml藤椒油、3</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#9</strong> 饺子怎么包</summary>
+          <div class="answer-text">抱歉，根据检索到的食谱信息，目前只有关于**速冻水饺**的烹饪方法（包括水煮和煎制），没有包含如何**手工包饺子**的步骤。因此无法回答您的问题。
+
+如果您想了解如何烹饪速冻饺子，我可以为您提供相关步骤（例如水煮饺子的加凉水法或煎饺子的做法）。如果您需要手工包饺子的方法，建议您参考其他专门介绍面食制作的资料。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#10</strong> 蒜蓉西兰花的做法</summary>
+          <div class="answer-text"># 蒜蓉西兰花的做法
+
+根据检索到的食谱信息，以下是蒜蓉西兰花的完整做法：
+
+## 菜品简介
+
+这道家常蔬菜以蒜香浓郁、调味简单见长，西兰花焯水后软嫩或微脆，清淡鲜美。富含维生素 C、膳食纤维和多种抗氧化物质，是营养均衡的快手素菜。制作过程不难，新手也能轻松掌握，从备料到出锅一般约 **15 分钟** 即可完成。
+
+- **预估烹饪难度**：★★（简单）
+- **预估卡路里**：187 大卡（一份，约2人份）
+
+---
+
+## 必备原料和工具
+
+- 西兰花 1 个
+- 大蒜 3-4 瓣
+- 生抽
+- 蚝油
+- 白糖
+
+---
+
+## 每份用料（约2人份）
+
+| 原料 | 用量 |
+|------|------|
+| 西兰花 | 约 200 g（约 1/2 中等大小的西兰花） |
+| 大蒜 | 3-4 瓣 |
+| 生抽 | 10 ml |
+| 蚝油 | 5 ml |
+| 白糖 | 2 g |
+
+---
+
+## 操作步骤
+
+1. **处理西兰花**：将西兰花切成小朵，清洗干净。
+2. **处理蒜末**：将大蒜去皮，切成蒜末，备用。
+3. **烧水焯菜**：锅中加入 1000 ml 饮用水，</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#11</strong> 可乐鸡翅需要什么材料</summary>
+          <div class="answer-text">根据检索到的食谱信息，制作**可乐鸡翅**需要以下材料：
+
+### 必备原料
+- 鸡翅中
+- 可乐
+- 白糖
+- 生抽
+- 盐
+- 生姜
+- 料酒或啤酒
+- 小葱
+
+### 具体用量（按一盘份量，约10～12只鸡翅）
+- 可乐：500ml
+- 白糖：10克
+- 生抽：15克
+- 老抽：3克（可选，用于调底色）
+- 盐：2克
+- 生姜：2片
+- 料酒：20毫升
+- 小葱：挽成结
+
+以上信息来自[1]和[2]中关于可乐鸡翅的食谱说明。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#12</strong> 麻婆豆腐的配料</summary>
+          <div class="answer-text">根据检索到的食谱信息，以下是麻婆豆腐的配料（原料）清单：
+
+- **内脂豆腐**（推荐清美）
+- **咸鸭蛋**（推荐留夫鸭，是灵魂）
+- **五花肉**（或超市的肉糜）
+- **大蒜**
+- **生姜**
+- **小米椒**（不吃辣的可选）
+- **香辣酱**（推荐广乐）
+- **花椒**
+- **食盐**
+- **酱油**（味极鲜酱油）
+
+参考用量（以1盒内脂豆腐为例）：
+- 内脂豆腐：1盒
+- 咸鸭蛋：1枚
+- 五花肉：20-30g
+- 大蒜：两瓣
+- 生姜：2片
+- 小米辣：5根
+- 蒜蓉辣酱：5g
+- 花椒：20颗
+- 食盐：3g
+- 酱油：10g
+
+以上信息来源于《麻婆豆腐》食谱（[1]、[2]）。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#13</strong> 红烧肉需要哪些调料</summary>
+          <div class="answer-text">红烧肉的做法有很多种，不同地区的调料略有差异。根据检索到的食谱，常见的红烧肉调料包括以下几类。我会分别列出各派系的调料清单，供你参考。
+
+---
+
+### 一、各派系红烧肉调料汇总
+
+#### 1. **简易红烧肉**（[1]）
+- **主料**：五花肉（3~4斤）
+- **辅料**：生姜、冰糖、生抽、老抽、料酒、香叶、八角、盐、开水、葱（可选鹌鹑蛋、豆皮）
+
+#### 2. **南派红烧肉**（[2]）
+- **主料**：五花肉（1000g）
+- **辅料**：油、冰糖、白砂糖、老抽、料酒、香叶、八角、生姜、盐、葱、开水、凉水、蒜、花椒（额外用炒糖色）
+
+#### 3. **湖南家常红烧肉**（[3]）
+- **主料**：带皮五花肉（500g）
+- **辅料**：食用油、干小米椒、姜、生抽、老抽、香叶、桂皮、八角、冰糖、料酒、盐、开水
+
+#### 4. **徽派红烧肉**（[4]）
+- **主料**：五花肉（300g）
+- **辅料**：食用油、白砂糖、生抽、蚝油、老抽、姜片、蒜头、料酒、葱、五香粉、盐
+
+---
+
+### 二、综合来看，红烧肉的“通用调料”通常包括：
+- **五花肉</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#14</strong> 番茄炒蛋的材料清单</summary>
+          <div class="answer-text">抱歉，我不知道这道菜的原料信息。根据检索到的食谱，与“番茄炒蛋”比较接近的菜品有：
+
+- **西红柿鸡蛋汤**：原料包括西红柿、鸡蛋、香油、味素、盐、葱、姜、蒜。
+- **番茄牛肉蛋花汤**：原料包括牛肉、番茄、鸡蛋、葱、姜、蒜、盐、胡椒粉。
+- **美式炒蛋**：主要原料为鸡蛋和牛奶，口感松软。
+
+如果您需要的是类似番茄和鸡蛋搭配的菜谱，可以参考上方的西红柿鸡蛋汤或番茄牛肉蛋花汤。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#15</strong> 宫保鸡丁用什么材料</summary>
+          <div class="answer-text">根据检索到的食谱信息（来源：[1]宫保鸡丁），制作宫保鸡丁所需的材料如下：
+
+## 必备原料
+- 手枪腿（或鸡胸脯肉）
+- 大葱
+- 干辣椒（或二荆条）
+- 熟花生
+- 生抽酱油
+- 香醋
+- 白糖
+- 料酒
+- 盐
+- 鸡精
+- 淀粉
+- 植物油
+- 芝麻油
+
+## 可选原料（根据口味添加）
+- 油泼辣子
+- 莴笋
+- 生花生（可替代熟花生）
+- 豆瓣酱
+
+## 推荐一人份用量参考（简单版）
+- 手枪腿（或鸡胸肉）：1支（约350g）
+- 大葱：1根（约180g）
+- 熟花生：150g
+- 姜片：10g
+- 干辣椒（或二荆条）：10g
+- 生抽酱油：10g
+- 白糖：2g
+- 盐：2g
+- 植物油：20g
+- 淀粉：15g
+- 料酒：15g
+
+以上是制作宫保鸡丁的基本材料清单。如果需要更丰富的风味，还可以准备老抽、花椒、豆瓣酱等进阶配料。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#16</strong> 水煮鱼需要准备什么</summary>
+          <div class="answer-text">根据检索到的食谱信息，制作**水煮鱼**需要准备以下原料和工具：
+
+### 必备原料
+- **主料**：巴沙鱼 500g
+- **蔬菜**（推荐组合 300g～500g，如土豆片、豆芽、花菜、生菜等，可自由搭配）
+- **调料**：
+  - 红油豆瓣酱 40g（不怕辣可多加 10～20g）
+  - 豆豉 10g（可选）
+  - 藤椒油 10ml
+  - 菜籽油 25ml（其中 5ml 用于腌制，20ml 用于炒豆瓣酱）
+  - 白胡椒粉 3g
+  - 大蒜 2 瓣
+  - 盐 5g
+  - 糖 2g
+
+### 必备工具
+- 量杯
+- 厨房秤（可选）
+- 大不锈钢碗
+
+以上信息来自食谱[1]《水煮鱼 - 完整食谱》。如果还需要其他细节（如操作步骤），可以继续提问。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#17</strong> 今天吃什么</summary>
+          <div class="answer-text">根据您“今天吃什么”的需求，我推荐以下几道菜，涵盖不同口味和营养搭配，您可以根据自己的喜好和时间选择：
+
+---
+
+**1. 清炒花菜**  
+- **类别**：家常素菜  
+- **难度**：★★  
+- **预估卡路里**：211 大卡  
+- **推荐理由**：简单快手（15分钟），口感脆嫩，富含维生素C和膳食纤维，适合想吃得清淡低脂的时候。
+
+**2. 豆豉鲮鱼油麦菜**  
+- **类别**：荤素搭配小炒  
+- **难度**：★★  
+- **预估卡路里**：416 大卡  
+- **推荐理由**：咸香下饭，鲮鱼酥香、油麦菜清脆，富含蛋白质和纤维，新手15分钟就能完成，适合搭配米饭。
+
+**3. 意式肉酱面**  
+- **类别**：西式简餐  
+- **难度**：★  
+- **预估卡路里**：1199 大卡  
+- **推荐理由**：酱汁浓郁，肉末和意面提供充足能量，做法简单（15分钟），适合忙碌时快速满足碳水需求。
+
+**4. 白灼虾**  
+- **类别**：粤式海鲜  
+- **难度**：★★  
+- **预估卡路里**：519 大卡  
+- **推荐理由**：虾</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#18</strong> 推荐几道好吃的荤菜</summary>
+          <div class="answer-text">根据检索到的食谱信息，为您推荐以下5道不同风味的荤菜，供您选择：
+
+1. **水煮肉片**  
+   - **推荐理由**：麻辣鲜香、肉片滑嫩，经典的川菜下饭神器。搭配豆芽等蔬菜，营养均衡。  
+   - **类别**：川菜  
+   - **难度**：★★★★★（较高）  
+   - **预估卡路里**：361大卡
+
+2. **老式锅包肉**  
+   - **推荐理由**：东北名菜，外壳酥脆、酸甜爽口，白醋的酸香非常开胃。猪肉搭配葱姜解腻。  
+   - **类别**：东北菜  
+   - **难度**：★★★★（中等偏上）  
+   - **预估卡路里**：882大卡
+
+3. **香煎五花肉**  
+   - **推荐理由**：快手家常，五花肉煎得焦香微脆，搭配生菜和豆瓣酱，肥而不腻。半小时即可上桌。  
+   - **类别**：家常快手菜  
+   - **难度**：★★★（中等）  
+   - **预估卡路里**：2985大卡（偏高，适合偶尔享用）
+
+4. **白菜猪肉炖粉条**  
+   - **推荐理由**：东北经典炖菜，汤汁浓郁，五花肉软烂、粉条滑韧，白菜清甜解腻。荤素</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#19</strong> 有什么简单的家常菜推荐</summary>
+          <div class="answer-text">根据检索到的食谱，以下是一些简单易做的家常菜推荐，适合新手快速上手：
+
+### 推荐菜品
+
+1. **蒜苔炒肉末**
+   - 类别：热菜（荤素搭配）
+   - 难度：★★（简单）
+   - 预估卡路里：258 大卡
+   - 推荐理由：咸鲜脆嫩，蒜香浓郁，从切配到出锅约10分钟，非常适合新手练手。
+
+2. **清炒花菜**
+   - 类别：热菜（素菜）
+   - 难度：★★（简单）
+   - 预估卡路里：211 大卡
+   - 推荐理由：口感脆嫩，富含维生素C和膳食纤维，制作仅需15分钟，零基础也能成功。
+
+3. **炒青菜**
+   - 类别：热菜（素菜）
+   - 难度：★★（简单）
+   - 预估卡路里：152 大卡
+   - 推荐理由：清爽可口，备菜到出锅仅需10分钟，是健康低卡的选择。
+
+4. **葱油拌面**
+   - 类别：主食/面点
+   - 难度：★★（简单）
+   - 预估卡路里：355 大卡
+   - 推荐理由：经典上海家常面点，葱油香味独特，20分钟内搞定，适合作为快手晚餐。
+
+5. **糖醋汁**（可搭配其他菜肴）
+   - 类别：调味汁
+   - 难度：★</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#20</strong> 低热量的素菜有什么</summary>
+          <div class="answer-text">根据检索到的食谱信息，以下是一些低热量的素菜推荐，按卡路里从低到高排列：
+
+1. **炒青菜**（152大卡）  
+   清爽脆嫩，含丰富维生素和膳食纤维，做法简单，10分钟即可完成。  
+   - 类别：家常素菜  
+   - 难度：★★  
+   - 预估卡路里：152大卡
+
+2. **上汤娃娃菜**（158大卡）  
+   清甜鲜美，低脂高纤维，搭配少量皮蛋和午餐肉风味佳。  
+   - 类别：家常素菜  
+   - 难度：★★★  
+   - 预估卡路里：158大卡
+
+3. **蒜蓉西兰花**（187大卡）  
+   蒜香浓郁，富含维生素C和抗氧化物质，焯水后口感软嫩或微脆。  
+   - 类别：家常素菜  
+   - 难度：★★  
+   - 预估卡路里：187大卡
+
+4. **清炒花菜**（211大卡）  
+   脆嫩爽口，含维生素C和膳食纤维，15分钟即可完成。  
+   - 类别：家常素菜  
+   - 难度：★★  
+   - 预估卡路里：211大卡
+
+5. **小炒藕丁**（214大卡）  
+   藕丁脆嫩微辣，含膳食纤维和维生素，耗时约20分钟。  
+   - 类</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#21</strong> 适合新手的菜有哪些</summary>
+          <div class="answer-text">根据检索到的食谱，以下菜品非常适合新手，它们难度低、步骤简单，且耗时短：
+
+- **意式肉酱面**（难度 ★）
+  理由：只需简单切炒，搭配成品意面酱，15分钟即可完成，是比方便面更满足的快捷西餐。
+
+- **清炒花菜**（难度 ★★）
+  理由：做法简单快捷，仅需15分钟，口感脆嫩，富含维生素C和膳食纤维。
+
+- **蒜苔炒肉末**（难度 ★★）
+  理由：北方家常菜，备料轻松，10分钟出锅，咸鲜脆嫩，荤素搭配均衡。
+
+- **紫菜蛋花汤**（难度 ★★）
+  理由：清淡鲜美，20分钟即可完成，营养均衡，对新手非常友好。
+
+- **糖醋汁**（难度 ★★）
+  理由：虽是一道调味汁，但调制简单、比例易记，10分钟就能做好，能让家常菜瞬间有风味。
+
+这些菜品烹饪难度均为1-2星，适合新手尝试。如果你需要具体做法，可以进一步询问。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#22</strong> 能不能推荐几道汤</summary>
+          <div class="answer-text">当然可以！根据您提供的食谱信息，我为您推荐以下四道汤品，它们各有特色，适合不同口味和需求：
+
+---
+
+### 1. 朱雀汤
+- **类别**：汤品（豫东家常快手汤）
+- **难度**：★（极简）
+- **预估卡路里**：168 大卡
+- **推荐理由**：口感顺滑香甜，带芝麻油醇香，制作超快（不到10分钟），还有清热去火的辅助效果。适合零基础新手或想快速喝上一碗热汤的人。
+
+### 2. 西红柿鸡蛋汤
+- **类别**：汤品（家常大众汤）
+- **难度**：★★（简单）
+- **预估卡路里**：258 大卡
+- **推荐理由**：酸甜开胃、滑嫩可口，富含番茄红素和优质蛋白，老少皆宜，制作约15分钟。适合作为日常佐餐汤品。
+
+### 3. 金针菇汤
+- **类别**：汤品（清淡快手汤）
+- **难度**：★★（简单）
+- **预估卡路里**：149 大卡
+- **推荐理由**：清淡爽口，富含氨基酸和膳食纤维，加鸡蛋补充蛋白质。从备菜到出锅仅需10分钟，低卡健康，适合减脂期或追求清淡口味的人群。
+
+### 4. 生汆丸子汤
+- **类别**：汤品（原汁原味家常汤）
+- **难度**：★★</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#23</strong> 有什么好吃的早餐推荐</summary>
+          <div class="answer-text">根据检索到的食谱信息，以下是为您推荐的几款美味早餐，涵盖不同风格和难度，您可以根据自己的时间和口味选择：
+
+---
+
+### 1. **牛奶燕麦**
+- **推荐理由**：高蛋白、高纤维，搭配煎蛋后营养更均衡。口感温热柔和，饱腹感强，制作仅需3分钟，非常适合匆忙的早晨。
+- **类别**：便捷营养早餐
+- **难度**：★（极易）
+- **预估卡路里**：421 大卡
+
+### 2. **燕麦鸡蛋饼**
+- **推荐理由**：软嫩可口，富含蛋白质和膳食纤维，能量充足。制作简单，十几分钟即可出锅，尤其适合健身人士和工作日早晨。
+- **类别**：快手营养早餐
+- **难度**：★★（简单）
+- **预估卡路里**：535 大卡
+
+### 3. **蒸花卷**
+- **推荐理由**：经典北方面食，松软麦香，搭配粥或豆浆非常满足。使用冷冻花卷蒸制，半小时即成，厨房新手也能轻松操作。
+- **类别**：传统面食早餐
+- **难度**：★★（简单）
+- **预估卡路里**：400 大卡
+
+### 4. **吐司果酱**
+- **推荐理由**：极简快手，无需开火，2分钟完成。外脆内软，方便携带，适</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#24</strong> 高大上的宴客菜有哪些</summary>
+          <div class="answer-text">根据检索到的食谱信息，以下是适合作为高大上宴客菜的推荐菜品。这些菜肴在外观、口味或制作工序上都具有一定档次，能够给客人留下深刻印象。
+
+| 菜品名称 | 类别 | 难度 | 预估卡路里 | 推荐理由 |
+|----------|------|------|------------|----------|
+| **红烧鱼** | 中式烧菜 | ★★★★ | 570 大卡 | 经典宴客硬菜，咸鲜微甜，鱼肉嫩滑入味，色泽红亮，寓意“年年有余”，适合正式场合。 |
+| **老式锅包肉** | 东北名菜 | ★★★★ | 882 大卡 | 外酥里嫩、酸甜爽口，造型美观，是东北传统宴席菜，需要一定烹饪技巧，展现厨艺。 |
+| **罗宋汤** | 海派汤品 | ★★★★ | 2006 大卡 | 酸甜浓郁、口感醇厚，以番茄和牛肉为主料，营养丰富，作为宴客的开胃汤品非常大气。 |
+
+**说明**：酸辣土豆丝（难度★★，374大卡）和糖醋汁（调味用料，不是完整菜品）更适合日常家常菜，不适合作为高大上宴客菜。以上三道菜在味道、外观和难度上都符合宴客要求，你可以根据客人偏好选择其中一道或几道组合。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#25</strong> 哪些菜热量低</summary>
+          <div class="answer-text">根据提供的食谱信息，以下菜品热量相对较低，适合减脂或轻食需求：
+
+1. **上汤娃娃菜**（158 大卡）  
+   - 类别：家常素菜  
+   - 难度：★★★  
+   - 特点：清甜鲜美，低脂低热量，富含膳食纤维，适合减肥期间食用。
+
+2. **奇异果菠菜特调**（184 大卡）  
+   - 类别：果蔬特饮  
+   - 难度：★  
+   - 特点：清爽健康，富含维生素 C 和膳食纤维，制作简单。
+
+3. **紫菜蛋花汤**（217 大卡）  
+   - 类别：中式简易汤菜  
+   - 难度：★★  
+   - 特点：清淡鲜美，紫菜与鸡蛋营养均衡，热量适中。
+
+4. **吐司果酱**（223 大卡）  
+   - 类别：西式简餐  
+   - 难度：★  
+   - 特点：极简快手，主要提供碳水化合物，适合快速补充能量。
+
+5. **魔芋蛋糕**（234 大卡）  
+   - 类别：低热量甜点  
+   - 难度：★★★★  
+   - 特点：无麸质，用赤藓糖醇代糖，膳食纤维和蛋白质丰富，饱腹感强。
+
+其中**上汤娃娃菜**和**奇异果菠菜特调**是热量最低的两道菜，推荐</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#26</strong> 老抽和生抽有什么区别</summary>
+          <div class="answer-text">根据目前提供的食谱信息，只提到了老抽和生抽都是常见的调味品（如在脆皮豆腐、蒲烧茄子、白菜猪肉炖粉条等菜谱中同时出现），但**没有解释两者在颜色、味道或用途上的具体区别**。因此我无法基于现有信息回答您的问题。
+
+如需了解更多，建议查阅其他专业烹饪资料。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#27</strong> 做红烧肉用什么部位的肉</summary>
+          <div class="answer-text">制作红烧肉最常用、最推荐的部位是**五花肉**。检索到的多个菜谱（如简易红烧肉、南派红烧肉、湖南家常红烧肉、徽派红烧肉）均明确使用五花肉，其中湖南做法特别强调要用**带皮五花肉**。五花肉肥瘦相间，经过炖煮后能达到肥而不腻、入口软糯的效果。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#28</strong> 豆瓣酱是什么</summary>
+          <div class="answer-text">根据您提供的食谱信息，虽然多个食谱中提到了“豆瓣酱”（包括“郫县红油豆瓣酱”、“郫县豆瓣酱”等），但没有任何一条信息对“豆瓣酱”进行定义、成分说明或背景介绍。因此，我无法从现有信息中回答“豆瓣酱是什么”这个问题。建议您查阅其他可靠来源以获取详细解释。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#29</strong> 鱼香肉丝里为什么没有鱼</summary>
+          <div class="answer-text">根据提供的食谱信息，无法回答“鱼香肉丝里为什么没有鱼”这一问题。食谱中只记录了鱼香肉丝的做法和营养信息，但没有解释菜名的由来。要了解原因，可能需要查阅其他资料。</div>
+        </details>
+        <details class="answer-detail">
+          <summary><strong>#30</strong> 高蛋白低脂肪的菜有哪些</summary>
+          <div class="answer-text">根据检索到的食谱，以下菜品符合高蛋白、低脂肪的特点，推荐如下：
+
+1. **溏心蛋**  
+   - 推荐理由：每颗鸡蛋提供约 **6克优质蛋白质**，脂肪含量低，适合健身人群补充营养。  
+   - 菜品类别：蛋类 / 家常菜  
+   - 预估难度：★★★  
+   - 预估卡路里：**72 大卡**
+
+2. **西红柿鸡蛋汤**  
+   - 推荐理由：富含 **优质蛋白质**（来自鸡蛋）和维生素C，酸甜开胃，低脂健康。  
+   - 菜品类别：汤品 / 家常菜  
+   - 预估难度：★★  
+   - 预估卡路里：**258 大卡**
+
+此外，**上汤娃娃菜**（158 大卡）和 **魔芋蛋糕**（234 大卡）也属于低脂选项，但蛋白质含量相对较低或未明确强调高蛋白，可根据实际需求选择。</div>
+        </details>
+</div>
+
+<div class="meta">
+  <strong>评估配置</strong><br>
+  模型: <code>deepseek-chat</code> ·
+  最大 token: <code>4096</code> ·
+  样本数: <code>30</code><br>
+  指标: <code>answer_relevancy</code>, <code>context_precision</code>, <code>context_recall</code>, <code>faithfulness</code> ·
+  中文适配: <code>ragas adapt_prompts(language="chinese")</code> + 磁盘缓存 ·
+  生成时间: <code>N/A</code>
+</div>
+
+</div>
+</body>
+</html>

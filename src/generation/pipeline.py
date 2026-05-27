@@ -263,6 +263,7 @@ class RAGPipeline:
                     "level": c["chunk"]["level"] or "",
                     "section": c["chunk"]["metadata"].get("section_type") or "",
                     "category": c["chunk"]["metadata"].get("category") or "",
+                    "text": c["chunk"].get("text", ""),
                 }
                 for c in context
             ],
