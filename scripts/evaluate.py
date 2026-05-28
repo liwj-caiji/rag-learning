@@ -4,6 +4,7 @@
 Usage:
     python scripts/evaluate.py --mode llm
     python scripts/evaluate.py --mode rule --limit 5
+    python scripts/evaluate.py --backend langchain --limit 5
     python scripts/evaluate.py --intent howto --output report.json
 """
 
@@ -14,10 +15,10 @@ import logging
 import os
 import sys
 
-# Ensure src/ is importable
+# Ensure project root is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.evaluation import (
+from shared.evaluation import (
     load_eval_dataset,
     filter_by_intent,
     RAGASEvaluator,
@@ -25,8 +26,8 @@ from src.evaluation import (
     save_json_report,
     DEFAULT_METRICS,
     DEFAULT_DATASET_PATH,
+    LLM_API_KEY_ENV,
 )
-from src.config import LLM_API_KEY_ENV
 
 
 def main():
@@ -36,6 +37,10 @@ def main():
     parser.add_argument(
         "--dataset", type=str, default=DEFAULT_DATASET_PATH,
         help="Path to evaluation dataset YAML file.",
+    )
+    parser.add_argument(
+        "--backend", type=str, choices=("src", "langchain"), default="src",
+        help="Backend implementation (default: src).",
     )
     parser.add_argument(
         "--mode", type=str, choices=("rule", "llm"), default="rule",
@@ -91,8 +96,11 @@ def main():
 
     # Build pipeline
     use_llm = args.mode == "llm"
-    from src.generation import RAGPipeline
-    log.info("Creating pipeline: mode=%s", args.mode)
+    if args.backend == "langchain":
+        from src_langchain.pipeline import RAGPipeline
+    else:
+        from src.generation import RAGPipeline
+    log.info("Creating pipeline: backend=%s mode=%s", args.backend, args.mode)
     try:
         pipeline = RAGPipeline(use_llm=use_llm)
     except ValueError as e:

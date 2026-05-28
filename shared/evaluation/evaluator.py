@@ -1,4 +1,8 @@
-"""Core evaluator wrapping RAGAS for the recipe RAG pipeline."""
+"""Core evaluator wrapping RAGAS — shared by both implementations.
+
+The pipeline is injected via constructor — no hard dependency on
+src/ or src_langchain/.
+"""
 
 from __future__ import annotations
 
@@ -9,15 +13,14 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-from src.config import LLM_API_KEY_ENV
 from .config import (
     DEFAULT_METRICS,
     EMBEDDING_METRICS,
     EVAL_LLM_MODEL,
     EVAL_LLM_API_BASE,
-    EVAL_LLM_TEMPERATURE,
     EVAL_LLM_MAX_TOKENS,
     EVAL_BATCH_SIZE,
+    LLM_API_KEY_ENV,
 )
 from .dataset import EvalSample
 
@@ -27,8 +30,6 @@ _DEFAULT_MODEL_NAME = "shibing624/text2vec-base-chinese"
 
 
 class _EmbeddingsAdapter:
-    """Wraps ragas native embeddings to also expose LangChain's embed_query."""
-
     def __init__(self, ragas_embeddings):
         self._wrapped = ragas_embeddings
 
@@ -50,8 +51,6 @@ class _EmbeddingsAdapter:
 
 @dataclass
 class SingleResult:
-    """Evaluation result for a single sample."""
-
     query: str
     intent: str
     scores: Dict[str, float]
@@ -62,8 +61,6 @@ class SingleResult:
 
 @dataclass
 class EvaluationResult:
-    """Aggregated evaluation result."""
-
     samples: List[SingleResult] = field(default_factory=list)
     aggregate: Dict[str, float] = field(default_factory=dict)
     per_intent: Dict[str, Dict[str, float]] = field(default_factory=dict)
@@ -71,14 +68,10 @@ class EvaluationResult:
 
 
 class RAGASEvaluator:
-    """Evaluates the RAG pipeline using RAGAS metrics.
+    """Evaluates a RAG pipeline using RAGAS metrics.
 
-    Usage:
-        from src.generation import RAGPipeline
-        pipeline = RAGPipeline(use_llm=True)
-        evaluator = RAGASEvaluator(pipeline)
-        result = evaluator.evaluate(samples)
-        print(result.aggregate)
+    The pipeline object is injected and must provide a .trace(query) method
+    returning a dict with keys: intent, answer, chunks (list of dicts with 'text' key).
     """
 
     def __init__(
@@ -97,26 +90,18 @@ class RAGASEvaluator:
 
     @property
     def eval_llm(self):
-        """Lazy-init a ragas-compatible InstructorLLM via llm_factory."""
         if self._eval_llm is None:
             import openai
             from ragas.llms import llm_factory
             api_key = os.environ.get(LLM_API_KEY_ENV)
             if not api_key:
-                raise ValueError(
-                    f"{LLM_API_KEY_ENV} environment variable is required for RAGAS evaluation"
-                )
+                raise ValueError(f"{LLM_API_KEY_ENV} env var required for RAGAS evaluation")
             client = openai.OpenAI(api_key=api_key, base_url=self._llm_api_base)
-            self._eval_llm = llm_factory(
-                self._llm_model,
-                client=client,
-                max_tokens=EVAL_LLM_MAX_TOKENS,
-            )
+            self._eval_llm = llm_factory(self._llm_model, client=client, max_tokens=EVAL_LLM_MAX_TOKENS)
         return self._eval_llm
 
     @property
     def eval_embeddings(self):
-        """Lazy-init embeddings with both ragas-native and LangChain interfaces."""
         if self._eval_embeddings is None:
             from ragas.embeddings import HuggingFaceEmbeddings as RagasHFE
             native = RagasHFE(model=self._embed_model)
@@ -129,16 +114,6 @@ class RAGASEvaluator:
         metrics: Optional[List[str]] = None,
         batch_size: int = EVAL_BATCH_SIZE,
     ) -> EvaluationResult:
-        """Run RAGAS evaluation on a list of samples.
-
-        Args:
-            samples: List of evaluation samples.
-            metrics: List of RAGAS metric names. Defaults to all.
-            batch_size: Number of samples per RAGAS evaluate() call.
-
-        Returns:
-            EvaluationResult with per-sample scores and aggregates.
-        """
         if not samples:
             log.warning("No samples provided for evaluation")
             return EvaluationResult()
@@ -146,21 +121,18 @@ class RAGASEvaluator:
         metrics = metrics or DEFAULT_METRICS
         ragas_metrics = self._build_metrics(metrics)
 
-        # Collect pipeline outputs for each sample
         rows = []
         single_results = []
         for sample in samples:
             sr = self._evaluate_one(sample)
             single_results.append(sr)
-            row = {
+            rows.append({
                 "user_input": sample.query,
                 "response": sr.answer,
                 "retrieved_contexts": sr.contexts,
                 "reference": sample.ground_truth or "",
-            }
-            rows.append(row)
+            })
 
-        # Build RAGAS Dataset and run evaluation
         ds = self._to_dataset(rows)
         if ds is None:
             log.error("Failed to build RAGAS dataset")
@@ -169,20 +141,15 @@ class RAGASEvaluator:
         try:
             from ragas import evaluate as ragas_evaluate
             ragas_result = ragas_evaluate(
-                dataset=ds,
-                metrics=ragas_metrics,
-                llm=self.eval_llm,
-                embeddings=self.eval_embeddings,
+                dataset=ds, metrics=ragas_metrics,
+                llm=self.eval_llm, embeddings=self.eval_embeddings,
             )
             scores_df = ragas_result.to_pandas()
         except Exception as e:
             log.error("RAGAS evaluate() failed: %s", e)
             return EvaluationResult(samples=single_results)
 
-        # Merge RAGAS scores back into SingleResults
         self._merge_scores(single_results, scores_df)
-
-        # Compute aggregates
         aggregate = self._compute_aggregate(single_results)
         per_intent = self._compute_per_intent(single_results)
 
@@ -198,12 +165,9 @@ class RAGASEvaluator:
         )
 
     def _evaluate_one(self, sample: EvalSample) -> SingleResult:
-        """Run pipeline.trace() for one sample and extract data for RAGAS."""
         try:
             trace = self.pipeline.trace(sample.query)
-            context_texts = [
-                c.get("text", "") for c in trace.get("chunks", [])
-            ]
+            context_texts = [c.get("text", "") for c in trace.get("chunks", [])]
             return SingleResult(
                 query=sample.query,
                 intent=trace.get("intent", sample.intent),
@@ -215,23 +179,15 @@ class RAGASEvaluator:
         except Exception as e:
             log.warning("Pipeline trace failed for %r: %s", sample.query, e)
             return SingleResult(
-                query=sample.query,
-                intent=sample.intent,
-                scores={"error": 1.0},
-                answer="",
-                num_chunks=0,
+                query=sample.query, intent=sample.intent,
+                scores={"error": 1.0}, answer="", num_chunks=0,
             )
 
     def _build_metrics(self, metric_names: List[str]):
-        """Instantiate RAGAS metric objects with Chinese prompts via adapt_prompts."""
         from ragas.metrics import (
-            ContextPrecision,
-            ContextRecall,
-            Faithfulness,
-            AnswerRelevancy,
-            AnswerCorrectness,
+            ContextPrecision, ContextRecall, Faithfulness,
+            AnswerRelevancy, AnswerCorrectness,
         )
-
         metric_map = {
             "context_precision": ContextPrecision,
             "context_recall": ContextRecall,
@@ -239,7 +195,6 @@ class RAGASEvaluator:
             "answer_relevancy": AnswerRelevancy,
             "answer_correctness": AnswerCorrectness,
         }
-
         built = []
         for name in metric_names:
             if name not in metric_map:
@@ -250,17 +205,11 @@ class RAGASEvaluator:
             if name in EMBEDDING_METRICS:
                 kwargs["embeddings"] = self.eval_embeddings
             built.append(cls(llm=self.eval_llm, **kwargs))
-
         if built:
             self._adapt_prompts_chinese(built)
         return built
 
     def _adapt_prompts_chinese(self, metrics_list):
-        """Adapt metric prompts to Chinese via ragas adapt_prompts, with disk cache.
-
-        On first run, calls the evaluator LLM to translate each metric's prompts
-        to Chinese and caches them to disk. Subsequent runs load from cache.
-        """
         import asyncio
         import pickle
         from pathlib import Path
@@ -269,7 +218,6 @@ class RAGASEvaluator:
         cache_dir.mkdir(exist_ok=True)
         cache_file = cache_dir / "chinese_prompts.pkl"
 
-        # Try loading cached prompts
         if cache_file.exists():
             try:
                 with open(cache_file, "rb") as f:
@@ -290,7 +238,6 @@ class RAGASEvaluator:
         log.info("Adapting %d metrics to Chinese via LLM...", len(metrics_list))
         asyncio.run(_adapt())
 
-        # Persist adapted prompts to disk cache
         try:
             prompts_data = [metric.get_prompts() for metric in metrics_list]
             with open(cache_file, "wb") as f:
@@ -301,7 +248,6 @@ class RAGASEvaluator:
 
     @staticmethod
     def _to_dataset(rows: List[dict]):
-        """Convert collected rows to a RAGAS-compatible Dataset."""
         try:
             from datasets import Dataset
             return Dataset.from_pandas(pd.DataFrame(rows))
@@ -310,16 +256,10 @@ class RAGASEvaluator:
             return None
 
     @staticmethod
-    def _merge_scores(
-        results: List[SingleResult], scores_df: pd.DataFrame
-    ):
-        """Merge RAGAS scores back into SingleResult objects."""
-        # Identify metric columns: exclude known input/internal columns
+    def _merge_scores(results: List[SingleResult], scores_df: pd.DataFrame):
         exclude = {"question", "answer", "contexts", "ground_truth",
                    "user_input", "retrieved_contexts", "reference", "response"}
-        score_cols = [c for c in scores_df.columns if c not in exclude
-                      and not c.startswith("_")]
-        # Only keep columns with numeric values
+        score_cols = [c for c in scores_df.columns if c not in exclude and not c.startswith("_")]
         metric_cols = []
         for col in score_cols:
             try:
@@ -329,7 +269,6 @@ class RAGASEvaluator:
                     metric_cols.append(col)
             except (ValueError, TypeError):
                 pass
-
         for i, sr in enumerate(results):
             if i < len(scores_df):
                 row = scores_df.iloc[i]
@@ -340,34 +279,20 @@ class RAGASEvaluator:
 
     @staticmethod
     def _compute_aggregate(results: List[SingleResult]) -> Dict[str, float]:
-        """Compute mean score per metric across all samples."""
         metric_values: Dict[str, List[float]] = {}
         for sr in results:
             for name, score in sr.scores.items():
                 metric_values.setdefault(name, []).append(score)
-
-        return {
-            name: sum(vals) / len(vals)
-            for name, vals in metric_values.items()
-            if vals
-        }
+        return {name: sum(vals) / len(vals) for name, vals in metric_values.items() if vals}
 
     @staticmethod
-    def _compute_per_intent(
-        results: List[SingleResult],
-    ) -> Dict[str, Dict[str, float]]:
-        """Compute mean scores grouped by intent."""
+    def _compute_per_intent(results: List[SingleResult]) -> Dict[str, Dict[str, float]]:
         grouped: Dict[str, Dict[str, List[float]]] = {}
         for sr in results:
             intent_metrics = grouped.setdefault(sr.intent, {})
             for name, score in sr.scores.items():
                 intent_metrics.setdefault(name, []).append(score)
-
         return {
-            intent: {
-                name: sum(vals) / len(vals)
-                for name, vals in metric_vals.items()
-                if vals
-            }
+            intent: {name: sum(vals) / len(vals) for name, vals in metric_vals.items() if vals}
             for intent, metric_vals in grouped.items()
         }

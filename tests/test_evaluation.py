@@ -10,22 +10,22 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.evaluation.dataset import (
+from shared.evaluation.dataset import (
     EvalSample,
     load_eval_dataset,
     filter_by_intent,
     samples_by_intent,
     has_ground_truth,
 )
-from src.evaluation.config import (
+from shared.evaluation.config import (
     DEFAULT_METRICS,
     GROUND_TRUTH_METRICS,
     EMBEDDING_METRICS,
 )
-from src.evaluation.reporter import (
+from shared.evaluation.reporter import (
     _result_to_dict,
 )
-from src.evaluation.evaluator import EvaluationResult, SingleResult
+from shared.evaluation.evaluator import EvaluationResult, SingleResult
 
 
 # ============================================================================
@@ -186,7 +186,7 @@ class TestEvaluationResult:
         assert r.aggregate == {}
 
     def test_aggregate_computation(self):
-        from src.evaluation.evaluator import RAGASEvaluator
+        from shared.evaluation.evaluator import RAGASEvaluator
         results = [
             SingleResult(query="q1", intent="howto", scores={"faithfulness": 0.8}),
             SingleResult(query="q2", intent="howto", scores={"faithfulness": 0.6}),
@@ -195,7 +195,7 @@ class TestEvaluationResult:
         assert agg == {"faithfulness": 0.7}
 
     def test_per_intent_grouping(self):
-        from src.evaluation.evaluator import RAGASEvaluator
+        from shared.evaluation.evaluator import RAGASEvaluator
         results = [
             SingleResult(query="q1", intent="howto", scores={"faithfulness": 0.8}),
             SingleResult(query="q2", intent="recommendation", scores={"faithfulness": 0.6}),
@@ -207,7 +207,7 @@ class TestEvaluationResult:
 
     def test_merge_scores(self):
         import pandas as pd
-        from src.evaluation.evaluator import RAGASEvaluator
+        from shared.evaluation.evaluator import RAGASEvaluator
         results = [
             SingleResult(query="q1", intent="howto", scores={}),
             SingleResult(query="q2", intent="howto", scores={}),
@@ -252,7 +252,7 @@ class TestReporter:
             tmp = f.name
 
         try:
-            from src.evaluation.reporter import save_json_report
+            from shared.evaluation.reporter import save_json_report
             save_json_report(r, tmp)
             with open(tmp, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
@@ -287,7 +287,7 @@ class TestEvaluatorConstruction:
     def test_evaluator_requires_pipeline(self):
         """RAGASEvaluator can be constructed with a pipeline."""
         from src.generation import RAGPipeline
-        from src.evaluation import RAGASEvaluator
+        from shared.evaluation import RAGASEvaluator
         pipe = RAGPipeline()
         evaluator = RAGASEvaluator(pipe)
         assert evaluator.pipeline is pipe
@@ -296,7 +296,7 @@ class TestEvaluatorConstruction:
     def test_evaluator_llm_needs_api_key(self):
         """eval_llm property raises without DEEPSEEK_API_KEY (or langchain_openai)."""
         from src.generation import RAGPipeline
-        from src.evaluation import RAGASEvaluator
+        from shared.evaluation import RAGASEvaluator
         pipe = RAGPipeline()
         evaluator = RAGASEvaluator(pipe)
         old_key = os.environ.pop("DEEPSEEK_API_KEY", None)
@@ -310,7 +310,7 @@ class TestEvaluatorConstruction:
     def test_evaluate_empty_samples(self):
         """evaluate() returns empty result for empty input."""
         from src.generation import RAGPipeline
-        from src.evaluation import RAGASEvaluator
+        from shared.evaluation import RAGASEvaluator
         pipe = RAGPipeline()
         evaluator = RAGASEvaluator(pipe)
         result = evaluator.evaluate([])
@@ -324,7 +324,7 @@ class TestEvaluatorConstruction:
 
 def test_evaluation_module_imports():
     """All expected evaluation names should be importable."""
-    from src.evaluation import (
+    from shared.evaluation import (
         EvalSample,
         load_eval_dataset,
         filter_by_intent,

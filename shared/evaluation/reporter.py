@@ -1,4 +1,4 @@
-"""Format and output evaluation results."""
+"""Format and output evaluation results — shared by both implementations."""
 
 from __future__ import annotations
 
@@ -7,13 +7,12 @@ import logging
 from pathlib import Path
 from typing import Dict
 
-from .evaluator import EvaluationResult, SingleResult
+from .evaluator import EvaluationResult
 
 log = logging.getLogger("evaluation.reporter")
 
 
 def print_console_report(result: EvaluationResult):
-    """Print evaluation results as a formatted table in the console."""
     if not result.samples:
         print("No evaluation results to display.")
         return
@@ -27,7 +26,6 @@ def print_console_report(result: EvaluationResult):
     print(f"  Metrics:     {', '.join(meta.get('metrics_used', []))}")
     print("-" * 64)
 
-    # Aggregates
     if result.aggregate:
         print("\n  Overall Scores:")
         print(f"  {'Metric':<30} {'Score':>8}")
@@ -35,25 +33,11 @@ def print_console_report(result: EvaluationResult):
         for name, score in sorted(result.aggregate.items()):
             print(f"  {name:<30} {score:>8.4f}")
 
-    # Per-intent breakdown
     if result.per_intent:
         print(f"\n  By Intent:")
         all_metrics = sorted(result.aggregate.keys())
-        if not all_metrics:
-            intents = list(result.per_intent.keys())
-            print(f"  {'Intent':<20}", end="")
-            for m in all_metrics or []:
-                print(f"  {m[:10]:>10}", end="")
-            print()
-            for intent, scores in sorted(result.per_intent.items()):
-                print(f"  {intent:<20}", end="")
-                for m in all_metrics or []:
-                    val = scores.get(m, float("nan"))
-                    print(f"  {val:>10.4f}", end="")
-                print()
-        else:
+        if all_metrics:
             cols = sorted(all_metrics)
-            # Header
             header = f"  {'Intent':<20}"
             for c in cols:
                 header += f"  {c[:10]:>10}"
@@ -62,7 +46,6 @@ def print_console_report(result: EvaluationResult):
             for _ in cols:
                 print(f"  {'-'*10}", end="")
             print()
-            # Rows
             for intent in ["recommendation", "howto", "ingredient", "factual"]:
                 scores = result.per_intent.get(intent)
                 if not scores:
@@ -73,16 +56,11 @@ def print_console_report(result: EvaluationResult):
                     row += f"  {val:>10.4f}"
                 print(row)
 
-    # Per-sample detail
     print(f"\n  Per-Sample Scores:")
-    print(f"  {'#':<4} {'Query':<30} {'Intent':<16}", end="")
     metric_names = sorted(result.aggregate.keys()) if result.aggregate else []
+    print(f"  {'#':<4} {'Query':<30} {'Intent':<16}", end="")
     for m in metric_names:
         print(f"  {m[:8]:>8}", end="")
-    print()
-    print(f"  {'-'*4} {'-'*30} {'-'*16}", end="")
-    for _ in metric_names:
-        print(f"  {'-'*8}", end="")
     print()
 
     for i, sr in enumerate(result.samples):
@@ -97,7 +75,6 @@ def print_console_report(result: EvaluationResult):
 
 
 def save_json_report(result: EvaluationResult, path: str):
-    """Save evaluation result as a JSON file."""
     data = _result_to_dict(result)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -107,7 +84,6 @@ def save_json_report(result: EvaluationResult, path: str):
 
 
 def _result_to_dict(result: EvaluationResult) -> dict:
-    """Convert EvaluationResult to a JSON-serializable dict."""
     return {
         "aggregate": result.aggregate,
         "per_intent": result.per_intent,
@@ -123,6 +99,7 @@ def _result_to_dict(result: EvaluationResult) -> dict:
             for sr in result.samples
         ],
     }
+
 
 METRIC_LABELS_ZH: Dict[str, str] = {
     "context_precision": "上下文精确度",

@@ -9,13 +9,4 @@ from src.config import (  # noqa: F401
     SPLIT_H3,
 )
 
-import jieba
-import re
-
-jieba.setLogLevel(20)
-
-
-def chinese_tokenize(text: str) -> list[str]:
-    """Tokenize text for BM25: jieba for Chinese, preserve English/numbers."""
-    tokens = jieba.lcut(text)
-    return [t.strip() for t in tokens if t.strip()]
+from shared.tokenizer import chinese_tokenize  # noqa: F401

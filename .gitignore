@@ -10,3 +10,4 @@ env/
 dist/
 build/
 .ragas_cache/
+logs/
