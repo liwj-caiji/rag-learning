@@ -1,5 +1,56 @@
 # Changelog
 
+## 2026-05-28 — 项目结构优化：共享模块提取 & 双后端统一
+
+### 项目结构重组
+
+#### 1. 共享包 `shared/` 提取
+- **`shared/evaluation/`**：RAGAS 评估模块从 `src/evaluation/` 提取，通过 pipeline 构造器注入消除对 `src/` 或 `src_langchain/` 的硬依赖
+- **`shared/tokenizer.py`**：jieba 中文分词函数 `chinese_tokenize()` 从此前的 4 处重复定义统一为单一源
+- **删除** `src/evaluation/`（5 个文件）和 `src_langchain/evaluation/`（5 个文件）
+
+#### 2. 消除命名问题
+- `src-langchain/rag_langchain/` → `src_langchain/`（移除短横线，消除多余嵌套层级）
+- 删除空的 `src-langchain/` 目录
+- 所有 `from rag_langchain` 导入 → `from src_langchain`
+
+#### 3. 统一入口
+- `app.py` 合并两份实现（原 420+420 行 → 340 行），通过 `--backend src|langchain` 切换
+- `scripts/evaluate.py` 新增 `--backend src|langchain` 参数
+
+#### 4. LangChain 后端索引隔离
+- LangChain 索引用独立文件名：`chunks_langchain.pkl`, `bm25_langchain.pkl`, `faiss_langchain/`
+- 修复 `BASE_DIR` 路径计算（3 层 → 2 层 dirname）
+
+### Bug 修复
+
+- 修复 LangChain API 兼容性：`get_relevant_documents()` → `invoke()`
+- 修复 `MarkdownHeaderTextSplitter.create_documents()` → `split_text()`
+- 修复 `BM25Retriever.get_scores()` 已移除的问题
+- 修复 `src_langchain/config.py` BASE_DIR 路径错误
+
+### 评估验证
+
+- 双后端小规模评估对比（3 样本）：`context_precision`、`context_recall`、`answer_relevancy` 完全一致，`faithfulness` 和 `answer_correctness` 在正常浮动范围内
+
+### 涉及文件
+
+| 文件 | 改动类型 |
+|------|----------|
+| `shared/` | 新增（7 个文件） |
+| `src_langchain/` | 重组（从 `src-langchain/rag_langchain/` 迁移） |
+| `src/evaluation/` | 删除（迁移至 `shared/evaluation/`） |
+| `src_langchain/evaluation/` | 删除（迁移至 `shared/evaluation/`） |
+| `src_langchain/retrieval/tokenizer.py` | 删除（迁移至 `shared/tokenizer.py`） |
+| `src_langchain/app.py` | 删除（合并至 `app.py`） |
+| `app.py` | 重写（统一双后端入口） |
+| `scripts/evaluate.py` | 修改（新增 --backend 参数） |
+| `src/preprocess/config.py` | 修改（chinese_tokenize 改为 re-export） |
+| `tests/test_evaluation.py` | 修改（导入路径迁移至 shared） |
+| `.gitignore` | 修改（新增 logs/） |
+| `docs/功能实现说明_LangChain重构.md` | 更新（项目结构、API 兼容说明） |
+| `docs/CHANGELOG.md` | 修改（新增本条） |
+
 ## 2026-05-27 — RAGAS 评估：ground truth 对齐 & 中文适配完成
 
 ### 数据修复
