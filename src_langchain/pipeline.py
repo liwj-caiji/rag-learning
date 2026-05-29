@@ -21,8 +21,16 @@ from .config import (
 from .rewriting import IntentResult, get_intent_classifier
 from .retrieval import hybrid_search, recommend_dishes
 from .generation import TemplateGenerator, LLMGenerator, Generator
+from .tracing import get_langfuse_handler
 
 log = logging.getLogger("pipeline.lc")
+
+try:
+    from langfuse import observe
+except ImportError:
+    def observe(**kwargs):  # type: ignore[no-redef]
+        """No-op decorator when langfuse is not installed."""
+        return lambda fn: fn
 
 
 class RAGPipeline:
@@ -52,18 +60,32 @@ class RAGPipeline:
 
         self._llm_model = llm_model
         self._llm_api_base = llm_api_base
+        self._use_llm = use_llm
+
+        self._langfuse_handler = get_langfuse_handler()
+        _callbacks = [self._langfuse_handler] if self._langfuse_handler else None
 
         self.rewriter = get_intent_classifier(
             use_llm=use_llm,
             model=llm_model,
             api_base=llm_api_base,
+            callbacks=_callbacks,
         )
         self.generator: Generator = (
-            LLMGenerator(model=llm_model, api_base=llm_api_base)
+            LLMGenerator(model=llm_model, api_base=llm_api_base, callbacks=_callbacks)
             if use_llm
             else TemplateGenerator()
         )
 
+        self._lf_client = None
+        if self._langfuse_handler:
+            try:
+                from langfuse import Langfuse
+                self._lf_client = Langfuse()
+            except Exception:
+                pass
+
+    @observe(name="RAGPipeline.run")
     def run(self, query: str, top_k: int = 5) -> str:
         """Execute full RAG pipeline and return answer string."""
         log.info("Query: %r | top_k=%d", query, top_k)
@@ -85,11 +107,16 @@ class RAGPipeline:
         log.info("Generate: %d chars | %.2fs | target=%s",
                  len(answer), time.time() - t2, intent_result.target_dish)
 
-        log.info("Total: %.2fs", time.time() - t0)
+        total_elapsed = time.time() - t0
+        log.info("Total: %.2fs", total_elapsed)
+
+        self._enrich_trace(query, intent_result, context, answer, total_elapsed)
         return answer
 
+    @observe(name="RAGPipeline.trace")
     def trace(self, query: str, top_k: int = 5) -> Dict:
         """Run pipeline and return detailed trace for debugging / UI."""
+        t0 = time.time()
         intent_result = self.rewriter.classify(query)
         context = self._retrieve(intent_result, top_k, query)
         answer = self.generator.generate(
@@ -97,7 +124,7 @@ class RAGPipeline:
             target_dish=intent_result.target_dish,
         )
 
-        return {
+        result = {
             "query": query,
             "intent": intent_result.intent,
             "rewritten": intent_result.rewritten,
@@ -117,6 +144,10 @@ class RAGPipeline:
             ],
             "answer": answer,
         }
+
+        total_elapsed = time.time() - t0
+        self._enrich_trace(query, intent_result, context, answer, total_elapsed)
+        return result
 
     # ------------------------------------------------------------------
     # Retrieval routing
@@ -236,3 +267,49 @@ class RAGPipeline:
                      rel_path, len(content))
 
         return enriched
+
+    # ------------------------------------------------------------------
+    # Langfuse trace enrichment (for auto-scoring)
+    # ------------------------------------------------------------------
+
+    def _enrich_trace(
+        self,
+        query: str,
+        intent_result: IntentResult,
+        context: List[Document],
+        answer: str,
+        total_elapsed: float,
+    ) -> None:
+        """Attach metadata to the current Langfuse span (trace).
+
+        In langfuse v4.x, @observe creates a span whose metadata flows
+        through to the trace. Tags are not supported via the span API,
+        so intent/model/backend info is included in metadata instead.
+        """
+        if not self._lf_client:
+            return
+
+        context_texts = [doc.page_content for doc in context]
+
+        try:
+            self._lf_client.update_current_span(
+                name=f"RAG: {query[:40]}{'...' if len(query) > 40 else ''}",
+                metadata={
+                    "intent": intent_result.intent,
+                    "target_dish": intent_result.target_dish or "",
+                    "rewritten_query": intent_result.rewritten or "",
+                    "num_chunks": len(context),
+                    "total_elapsed_s": round(total_elapsed, 3),
+                    "model": self._llm_model,
+                    "use_llm": self._use_llm,
+                    "filters": intent_result.filters or {},
+                    "probes": intent_result.probes or [],
+                    "contexts": context_texts,
+                    "tag_intent": intent_result.intent,
+                    "tag_model": self._llm_model,
+                    "tag_backend": "langchain",
+                    "tag_mode": "llm" if self._use_llm else "template",
+                },
+            )
+        except Exception:
+            log.debug("Failed to enrich Langfuse span", exc_info=True)

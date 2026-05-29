@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-05-29 — Langfuse 可观测性集成
+
+### 功能新增
+
+#### 1. Langfuse tracing 模块
+- **新增 `src_langchain/tracing.py`**：全局共享的 `LangchainCallbackHandler` 初始化模块
+  - 惰性初始化 + 单例复用，避免重复创建
+  - 环境变量未配置时静默降级，不影响业务逻辑
+- **新增 `docs/langfuse-integration.md`**：Langfuse 集成完整说明文档
+
+#### 2. Pipeline trace 富化
+- **文件**: `src_langchain/pipeline.py`
+- `RAGPipeline.run()` 和 `trace()` 添加 `@observe` 装饰器，自动创建 Langfuse trace，捕获 input/output
+- 新增 `_enrich_trace()` 方法，通过 `lf.update_current_span()` 注入元数据：
+  - 意图、目标菜名、改写查询、chunk 数量、耗时、模型名
+  - 检索到的上下文全文（`contexts`）
+  - `tag_` 前缀字段用于 Dashboard 筛选（langfuse v4.x 的 span API 不支持原生 tags）
+
+#### 3. Callback 传递链
+- **文件**: `src_langchain/generation/llm_chain.py`、`src_langchain/rewriting/llm_classifier.py`、`src_langchain/rewriting/rewriter.py`
+- `LangchainCallbackHandler` 通过 `callbacks` 参数从 `RAGPipeline` → `LLMIntentClassifier` → `LLMGenerator` 完整传递
+- LLM 调用时作为 `config["callbacks"]` 传入，Langfuse 自动捕获每次 LLM 调用的 token 用量、模型名、延迟，作为子 span 展示
+
+#### 4. 配置更新
+- **文件**: `src_langchain/config.py`
+- 新增 `LANGFUSE_PUBLIC_KEY_ENV`、`LANGFUSE_SECRET_KEY_ENV`、`LANGFUSE_BASE_URL_ENV` 配置项
+
+### 依赖更新
+
+- `requirements.txt`：新增 `langfuse>=2.0.0`
+
+### 涉及文件
+
+| 文件 | 改动类型 |
+|------|----------|
+| `src_langchain/tracing.py` | 新增 |
+| `src_langchain/pipeline.py` | 修改（@observe 装饰器、_enrich_trace、callback 传递） |
+| `src_langchain/generation/llm_chain.py` | 修改（新增 callbacks 参数） |
+| `src_langchain/rewriting/llm_classifier.py` | 修改（新增 callbacks 参数） |
+| `src_langchain/rewriting/rewriter.py` | 修改（工厂方法新增 callbacks 参数） |
+| `src_langchain/config.py` | 修改（新增 Langfuse 环境变量配置） |
+| `requirements.txt` | 修改（新增 langfuse>=2.0.0） |
+| `docs/langfuse-integration.md` | 新增 |
+| `docs/CHANGELOG.md` | 修改（新增本条） |
+
+---
+
 ## 2026-05-28 — 项目结构优化：共享模块提取 & 双后端统一
 
 ### 项目结构重组

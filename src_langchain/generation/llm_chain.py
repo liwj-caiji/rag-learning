@@ -25,10 +25,12 @@ class LLMGenerator(Generator):
         api_base: str = LLM_GEN_API_BASE,
         api_key: Optional[str] = None,
         fallback: bool = True,
+        callbacks: Optional[List] = None,
     ):
         self.model = model
         self.api_base = api_base
         self.fallback = fallback
+        self.callbacks = callbacks
 
         api_key = api_key or os.environ.get(LLM_API_KEY_ENV)
         self._llm = None
@@ -88,7 +90,10 @@ class LLMGenerator(Generator):
         ])
 
         chain = prompt | self._llm | StrOutputParser()
-        return chain.invoke({"user_prompt": user_prompt})
+        invoke_config = {}
+        if self.callbacks:
+            invoke_config["callbacks"] = self.callbacks
+        return chain.invoke({"user_prompt": user_prompt}, config=invoke_config)
 
     @staticmethod
     def _empty_response(intent: str, target_dish: Optional[str] = None) -> str:

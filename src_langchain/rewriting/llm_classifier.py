@@ -53,10 +53,12 @@ class LLMIntentClassifier:
         api_base: str = LLM_INTENT_API_BASE,
         api_key: Optional[str] = None,
         fallback: bool = True,
+        callbacks: Optional[List] = None,
     ):
         self.model = model
         self.api_base = api_base
         self.fallback = fallback
+        self.callbacks = callbacks
 
         api_key = api_key or os.environ.get(LLM_API_KEY_ENV)
         self._client = None
@@ -82,8 +84,12 @@ class LLMIntentClassifier:
             return self._do_fallback(query)
 
     def _llm_classify(self, query: str) -> IntentResult:
+        config = {}
+        if self.callbacks:
+            config["callbacks"] = self.callbacks
         result = self._structured_llm.invoke(
-            f"{INTENT_SYSTEM_PROMPT}\n\n用户查询：{query}"
+            f"{INTENT_SYSTEM_PROMPT}\n\n用户查询：{query}",
+            config=config,
         )
         return self._to_intent_result(result, query)
 

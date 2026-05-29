@@ -114,6 +114,14 @@ LLM_GEN_MAX_TOKENS = 2048
 LLM_API_KEY_ENV = "DEEPSEEK_API_KEY"
 
 # ============================================================================
+# Langfuse tracing
+# ============================================================================
+
+LANGFUSE_PUBLIC_KEY_ENV = "LANGFUSE_PUBLIC_KEY"
+LANGFUSE_SECRET_KEY_ENV = "LANGFUSE_SECRET_KEY"
+LANGFUSE_BASE_URL_ENV = "LANGFUSE_BASE_URL"
+
+# ============================================================================
 # App (Gradio server)
 # ============================================================================
 
