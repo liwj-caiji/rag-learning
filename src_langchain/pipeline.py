@@ -149,6 +149,56 @@ class RAGPipeline:
         self._enrich_trace(query, intent_result, context, answer, total_elapsed)
         return result
 
+    @observe(name="RAGPipeline.run_stream")
+    def run_stream(self, query: str, top_k: int = 5):
+        """Execute pipeline with streaming answer tokens."""
+        t0 = time.time()
+
+        intent_result = self.rewriter.classify(query)
+        yield {
+            "stage": "rewrite",
+            "intent": intent_result.intent,
+            "target_dish": intent_result.target_dish,
+            "rewritten": intent_result.rewritten,
+            "filters": intent_result.filters,
+            "probes": intent_result.probes,
+        }
+
+        t1 = time.time()
+        context = self._retrieve(intent_result, top_k, query)
+        yield {
+            "stage": "retrieve",
+            "num_chunks": len(context),
+            "chunks": [
+                {
+                    "dish": doc.metadata.get("dish_name") or "",
+                    "level": doc.metadata.get("level") or "",
+                    "section": doc.metadata.get("section_type") or "",
+                    "category": doc.metadata.get("category") or "",
+                }
+                for doc in context
+            ],
+            "elapsed": round(time.time() - t1, 3),
+        }
+
+        full_answer = []
+        for token in self.generator.generate_stream(
+            query, context, intent_result.intent,
+            target_dish=intent_result.target_dish,
+        ):
+            full_answer.append(token)
+            yield {"stage": "generate", "token": token}
+
+        answer = "".join(full_answer)
+        total_elapsed = time.time() - t0
+        self._enrich_trace(query, intent_result, context, answer, total_elapsed)
+
+        yield {
+            "stage": "done",
+            "answer": answer,
+            "total_elapsed": round(total_elapsed, 3),
+        }
+
     # ------------------------------------------------------------------
     # Retrieval routing
     # ------------------------------------------------------------------

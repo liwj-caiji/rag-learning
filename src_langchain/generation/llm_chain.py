@@ -11,6 +11,7 @@ from langchain_openai import ChatOpenAI
 from ..config import (
     LLM_GEN_MODEL, LLM_GEN_API_BASE, LLM_GEN_TIMEOUT,
     LLM_GEN_TEMPERATURE, LLM_GEN_MAX_TOKENS, LLM_API_KEY_ENV,
+    LLM_GEN_STREAM_TIMEOUT,
 )
 from .base import Generator
 from .prompts import get_system_prompt, build_user_prompt, format_context
@@ -94,6 +95,59 @@ class LLMGenerator(Generator):
         if self.callbacks:
             invoke_config["callbacks"] = self.callbacks
         return chain.invoke({"user_prompt": user_prompt}, config=invoke_config)
+
+    def generate_stream(
+        self,
+        query: str,
+        context: List[Document],
+        intent: str,
+        target_dish: Optional[str] = None,
+    ):
+        """Stream answer tokens via ChatOpenAI.stream()."""
+        if not self._llm:
+            fallback_answer = (
+                self._fallback_gen.generate(query, context, intent, target_dish=target_dish)
+                if self._fallback_gen else ""
+            )
+            yield fallback_answer
+            return
+
+        if not context:
+            yield self._empty_response(intent, target_dish=target_dish)
+            return
+
+        system_prompt = get_system_prompt(intent, target_dish=target_dish)
+        context_text = format_context(context)
+        user_prompt = build_user_prompt(query, context_text)
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("user", "{user_prompt}"),
+        ])
+
+        streaming_llm = ChatOpenAI(
+            model=self.model,
+            base_url=self.api_base,
+            api_key=self._llm.openai_api_key,
+            temperature=LLM_GEN_TEMPERATURE,
+            max_tokens=LLM_GEN_MAX_TOKENS,
+            timeout=LLM_GEN_STREAM_TIMEOUT,
+        )
+
+        chain = prompt | streaming_llm | StrOutputParser()
+        invoke_config = {}
+        if self.callbacks:
+            invoke_config["callbacks"] = self.callbacks
+
+        try:
+            for chunk in chain.stream({"user_prompt": user_prompt}, config=invoke_config):
+                yield chunk
+        except Exception:
+            fallback_answer = (
+                self._fallback_gen.generate(query, context, intent, target_dish=target_dish)
+                if self._fallback_gen else ""
+            )
+            yield fallback_answer
 
     @staticmethod
     def _empty_response(intent: str, target_dish: Optional[str] = None) -> str:
