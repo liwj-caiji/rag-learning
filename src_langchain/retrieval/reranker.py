@@ -27,7 +27,7 @@ class CrossEncoderReranker:
         max_length: int = RERANK_MAX_LENGTH,
     ):
         from sentence_transformers import CrossEncoder
-        self._model = CrossEncoder(model_name, max_length=max_length)
+        self._model = CrossEncoder(model_name, max_length=max_length, trust_remote_code=True)
 
     def rerank(
         self,
