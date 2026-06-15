@@ -136,3 +136,19 @@ LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 LOG_DATE_FORMAT = "%H:%M:%S"
 LOG_SUPPRESS = ("httpx", "faiss", "sentence_transformers", "huggingface_hub", "transformers")
+
+# ============================================================================
+# Streaming
+# ============================================================================
+
+LLM_GEN_STREAM = True
+LLM_GEN_STREAM_TIMEOUT = 30.0
+
+# ============================================================================
+# Cross-Encoder Reranker
+# ============================================================================
+
+RERANK_ENABLED = True
+RERANK_MODEL = "BAAI/bge-reranker-v2-minicpm"
+RERANK_CANDIDATES_N = 30    # number of RRF-fused candidates to feed into reranker
+RERANK_MAX_LENGTH = 512      # max token length for CrossEncoder input
