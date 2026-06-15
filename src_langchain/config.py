@@ -153,5 +153,5 @@ LLM_GEN_STREAM_TIMEOUT = 30.0
 
 RERANK_ENABLED = True
 RERANK_MODEL = "BAAI/bge-reranker-v2-minicpm"
-RERANK_CANDIDATES_N = 30    # number of RRF-fused candidates to feed into reranker
+RERANK_CANDIDATES_K = 30    # candidates fed into Cross-Encoder from RRF top-N
 RERANK_MAX_LENGTH = 512      # max token length for CrossEncoder input
