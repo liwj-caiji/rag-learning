@@ -107,9 +107,20 @@ def hybrid_search(
     dense_k: int = DENSE_CANDIDATES_K,
     sparse_k: int = SPARSE_CANDIDATES_K,
     rrf_k: float = RRF_K,
+    rerank: bool = False,
+    rerank_top_n: int = 30,
 ) -> List[Document]:
-    retriever = RRFFusionRetriever(k=k, dense_k=dense_k, sparse_k=sparse_k, rrf_k=rrf_k)
-    return retriever.invoke(query)
+    retriever = RRFFusionRetriever(
+        k=(rerank_top_n if rerank else k),
+        dense_k=dense_k, sparse_k=sparse_k, rrf_k=rrf_k,
+    )
+    results = retriever.invoke(query)
+
+    if rerank:
+        from .reranker import get_reranker
+        results = get_reranker().rerank(query, results, top_k=k)
+
+    return results
 
 
 def recommend_dishes(

@@ -176,6 +176,7 @@ class RAGPipeline:
             results = hybrid_search(
                 query_str, k=PIPELINE_HOWTO_K,
                 dense_k=PIPELINE_HOWTO_DENSE_K, sparse_k=PIPELINE_HOWTO_SPARSE_K,
+                rerank=True,
             )
             chosen = self._filter_by_section(results, dish_query, "操作", top_k)
             enriched = self._enrich_with_full_recipe(chosen, dish_query)
@@ -189,6 +190,7 @@ class RAGPipeline:
             results = hybrid_search(
                 query_str, k=PIPELINE_INGREDIENT_K,
                 dense_k=PIPELINE_INGREDIENT_DENSE_K, sparse_k=PIPELINE_INGREDIENT_SPARSE_K,
+                rerank=True,
             )
             chosen = self._filter_by_section(results, dish_query, "必备原料和工具", top_k)
             enriched = self._enrich_with_full_recipe(chosen, dish_query)
