@@ -1,12 +1,10 @@
-"""Cross-Encoder reranker for post-RRF fine-grained relevance scoring (LangChain backend)."""
+"""Cross-Encoder reranker for post-RRF fine-grained relevance scoring."""
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from langchain_core.documents import Document
-
-from src_langchain.config import RERANK_MODEL, RERANK_MAX_LENGTH, RERANK_CANDIDATES_K
+from src.config import RERANK_MODEL, RERANK_MAX_LENGTH, RERANK_CANDIDATES_K
 
 _reranker_instance: Optional["CrossEncoderReranker"] = None
 
@@ -19,10 +17,11 @@ def get_reranker() -> "CrossEncoderReranker":
 
 
 class CrossEncoderReranker:
-    """Re-score LangChain Documents with a Cross-Encoder model.
+    """Re-score candidates with a Cross-Encoder model.
 
     Uses BAAI/bge-reranker-v2-m3, a BERT-based multilingual reranker
-    that captures fine-grained semantic interaction.
+    that captures fine-grained semantic interaction via full
+    self-attention across (query, chunk) pairs.
     """
 
     def __init__(
@@ -36,23 +35,26 @@ class CrossEncoderReranker:
     def rerank(
         self,
         query: str,
-        candidates: List[Document],
+        candidates: List[Dict],
         top_k: int,
-    ) -> List[Document]:
+    ) -> List[Dict]:
         if not candidates:
             return []
 
-        pairs = [(query, doc.page_content) for doc in candidates]
+        pairs = [
+            (query, c["chunk"].get("text", ""))
+            for c in candidates
+        ]
 
         ce_scores = self._model.predict(pairs, show_progress_bar=False)
 
         if not hasattr(ce_scores, "__len__"):
             ce_scores = [ce_scores]
 
-        for doc, ce_score in zip(candidates, ce_scores):
-            doc.metadata["rrf_score"] = doc.metadata.get("rrf_score", 0)
-            doc.metadata["ce_score"] = float(ce_score)
+        for c, ce_score in zip(candidates, ce_scores):
+            c["rrf_score"] = c["score"]
+            c["ce_score"] = float(ce_score)
+            c["score"] = float(ce_score)
 
-        scored = list(zip(ce_scores, candidates))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [doc for _, doc in scored[:top_k]]
+        candidates.sort(key=lambda x: x["score"], reverse=True)
+        return candidates[:top_k]
