@@ -68,6 +68,10 @@ def main():
         help="Batch size for RAGAS evaluate().",
     )
     parser.add_argument(
+        "--rerank", action="store_true", default=False,
+        help="Enable Cross-Encoder reranking in retrieval (LangChain backend: rerank is already enabled for howto/ingredient by default).",
+    )
+    parser.add_argument(
         "--verbose", action="store_true", default=False,
         help="Enable DEBUG logging.",
     )
@@ -107,6 +111,10 @@ def main():
         log.error("Failed to create LLM pipeline: %s", e)
         log.error("Make sure %s is set. Falling back to rule mode.", LLM_API_KEY_ENV)
         pipeline = RAGPipeline(use_llm=False)
+
+    if args.rerank:
+        log.info("--rerank flag set: Cross-Encoder reranking is %s",
+                 "enabled by default for howto/ingredient in LangChain backend" if args.backend == "langchain" else "not yet implemented in src backend")
 
     # Evaluate
     evaluator = RAGASEvaluator(pipeline)
