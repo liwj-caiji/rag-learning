@@ -113,24 +113,69 @@ def _run_pipeline(query: str, top_k: int, use_llm: bool) -> dict:
                 "answer": f"执行失败：{e}"}
 
 
-def _chat_answer(message: str, history: List, use_llm: bool, top_k: int) -> Tuple[List, str]:
+def _chat_answer(message: str, history: List, use_llm: bool, top_k: int):
+    """Streaming chat — yields updated history after each token."""
     if not message or not message.strip():
-        return history, ""
-    log.info("Chat start | query=%r use_llm=%s top_k=%d", message, use_llm, top_k)
+        yield history, ""
+        return
+
+    log.info("Chat start (stream) | query=%r use_llm=%s top_k=%d", message, use_llm, top_k)
     t0 = time.time()
+
+    if not use_llm:
+        # Rule mode: non-streaming (works for both backends)
+        try:
+            pipe = _get_pipeline(use_llm=False)
+            answer = pipe.run(message, top_k=top_k)
+            elapsed = time.time() - t0
+            log.info("Chat done (rule) | elapsed=%.2fs answer_len=%d", elapsed, len(answer))
+            history.append({"role": "user", "content": message})
+            history.append({"role": "assistant", "content": answer})
+            yield history, ""
+        except Exception as e:
+            log.error("Chat failed: %s", e)
+            history.append({"role": "user", "content": message})
+            history.append({"role": "assistant", "content": f"错误：{e}"})
+            yield history, ""
+        return
+
+    # LLM mode: streaming
     try:
-        pipe = _get_pipeline(use_llm)
-        answer = pipe.run(message, top_k=top_k)
-        elapsed = time.time() - t0
-        log.info("Chat done | elapsed=%.2fs answer_len=%d", elapsed, len(answer))
+        pipe = _get_pipeline(use_llm=True)
         history.append({"role": "user", "content": message})
-        history.append({"role": "assistant", "content": answer})
+
+        # Check if pipeline supports streaming
+        if hasattr(pipe, 'run_stream'):
+            full_answer = ""
+            for event in pipe.run_stream(message, top_k=top_k):
+                if event["stage"] == "generate":
+                    full_answer += event["token"]
+                    # Yield updated history with partial answer
+                    partial_history = list(history)
+                    partial_history.append({"role": "assistant", "content": full_answer + " ▌"})
+                    yield partial_history, ""
+                elif event["stage"] == "done":
+                    elapsed = event.get("total_elapsed", time.time() - t0)
+                    log.info("Chat done (stream) | elapsed=%.2fs answer_len=%d", elapsed, len(full_answer))
+                    history.append({"role": "assistant", "content": full_answer})
+                    yield history, ""
+                    return
+                elif event["stage"] == "error":
+                    history.append({"role": "assistant", "content": f"错误：{event.get('message', '')}"})
+                    yield history, ""
+                    return
+        else:
+            # Fallback: non-streaming for backends without run_stream
+            answer = pipe.run(message, top_k=top_k)
+            elapsed = time.time() - t0
+            log.info("Chat done (non-stream) | elapsed=%.2fs answer_len=%d", elapsed, len(answer))
+            history.append({"role": "assistant", "content": answer})
+            yield history, ""
     except Exception as e:
         elapsed = time.time() - t0
-        log.error("Chat failed after %.2fs | %s: %s", elapsed, type(e).__name__, e)
-        history.append({"role": "user", "content": message})
+        log.error("Chat stream failed after %.2fs | %s: %s", elapsed, type(e).__name__, e)
         history.append({"role": "assistant", "content": f"错误：{e}"})
-    return history, ""
+        yield history, ""
 
 
 def _search(query: str, k: int, mode: str) -> Tuple[str, List, List]:
@@ -439,7 +484,7 @@ def _build_ui():
         )
 
         def on_chat_msg(msg, history, llm, top_k):
-            return _chat_answer(msg, history, llm, top_k)
+            yield from _chat_answer(msg, history, llm, top_k)
 
         chat_send.click(
             fn=on_chat_msg,
